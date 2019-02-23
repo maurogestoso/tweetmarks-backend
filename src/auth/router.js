@@ -6,7 +6,8 @@ import { promisify } from "util";
 const {
   TWITTER_API_KEY,
   TWITTER_API_SECRET_KEY,
-  TWITTER_CALLBACK
+  TWITTER_CALLBACK,
+  FRONTEND_BASE_URL
 } = process.env;
 
 const TWITTER_API_BASE_URL = "https://api.twitter.com";
@@ -68,7 +69,7 @@ router.get("/callback", (req, res, next) => {
         oauth_token_secret
       };
 
-      res.send({ user: { user_id, screen_name } });
+      res.redirect(`${FRONTEND_BASE_URL}/home`);
     })
     .catch(next);
 });
