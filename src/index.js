@@ -9,9 +9,10 @@ import cors from "cors";
 import morgan from "morgan";
 import bodyParser from "body-parser";
 import session from "express-session";
-import Twitter from "twitter";
 
 import r from "request";
+
+import apiRouter from "./api/router";
 
 const postRequest = promisify(r.post);
 
@@ -37,6 +38,8 @@ app.use(
     saveUninitialized: true
   })
 );
+
+app.use("/api", apiRouter);
 
 app.get("/sign-in", (req, res, next) => {
   return postRequest({
@@ -81,29 +84,7 @@ app.get("/callback", (req, res, next) => {
         oauth_token_secret
       };
 
-      res.redirect("/me");
-    })
-    .catch(next);
-});
-
-app.get("/me", (req, res, next) => {
-  const { user } = req.session;
-
-  if (!user) return next(new Error("No user session"));
-
-  const client = new Twitter({
-    consumer_key: TWITTER_API_KEY,
-    consumer_secret: TWITTER_API_SECRET_KEY,
-    access_token_key: user.oauth_token,
-    access_token_secret: user.oauth_token_secret
-  });
-
-  const params = { screen_name: user.screen_name };
-
-  return client
-    .get("statuses/user_timeline", params)
-    .then(tweets => {
-      res.send({ tweets });
+      res.send({ user: { user_id, screen_name } });
     })
     .catch(next);
 });
