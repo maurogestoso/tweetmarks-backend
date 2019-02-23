@@ -18,6 +18,8 @@ const {
 
 const app = express();
 
+if (NODE_ENV === "development") app.use(morgan("dev"));
+
 app.use(express.static(path.join(__dirname, "../public")));
 app.use(cors({ origin: FRONTEND_BASE_URL }));
 app.use(bodyParser.json());
