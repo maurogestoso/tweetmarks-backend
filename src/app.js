@@ -10,7 +10,6 @@ import authRouter from "./auth/router";
 import apiRouter from "./api/router";
 
 const {
-  PORT = 4000,
   SESSION_SECRET,
   NODE_ENV = "development",
   FRONTEND_BASE_URL
