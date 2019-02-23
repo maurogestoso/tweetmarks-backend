@@ -21,7 +21,7 @@ const app = express();
 if (NODE_ENV === "development") app.use(morgan("dev"));
 
 app.use(express.static(path.join(__dirname, "../public")));
-app.use(cors({ origin: FRONTEND_BASE_URL }));
+app.use(cors({ origin: FRONTEND_BASE_URL, credentials: true }));
 app.use(bodyParser.json());
 app.use(
   session({
