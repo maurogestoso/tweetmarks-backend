@@ -12,6 +12,7 @@ import session from "express-session";
 
 import r from "request";
 
+import authRouter from "./auth/router";
 import apiRouter from "./api/router";
 
 const postRequest = promisify(r.post);
@@ -40,6 +41,7 @@ app.use(
 );
 
 app.use("/api", apiRouter);
+app.use("/auth", authRouter);
 
 app.get("/sign-in", (req, res, next) => {
   return postRequest({
