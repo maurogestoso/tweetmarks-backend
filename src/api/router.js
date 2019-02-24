@@ -24,7 +24,7 @@ router.use((req, res, next) => {
 
 router.get("/favorites", (req, res, next) => {
   const { user } = req.session;
-  const params = { screen_name: user.screen_name };
+  const params = { screen_name: user.screen_name, tweet_mode: "extended" };
 
   return req.twitterClient
     .get("favorites/list", params)
