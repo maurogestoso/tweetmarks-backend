@@ -8,8 +8,8 @@ import session from "express-session";
 import mongoose from "mongoose";
 import createMongoStore from "connect-mongo";
 
-import authRouter from "./auth/router";
-import apiRouter from "./api/router";
+import auth from "./auth/router";
+import api from "./api";
 
 const {
   SESSION_SECRET,
@@ -36,7 +36,7 @@ app.use(
   })
 );
 
-app.use("/api", apiRouter);
-app.use("/auth", authRouter);
+app.use("/api", api);
+app.use("/auth", auth);
 
 export default app;

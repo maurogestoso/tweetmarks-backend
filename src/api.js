@@ -1,6 +1,8 @@
 import express from "express";
 import Twitter from "twitter";
 
+import favoritesRouter from "./favorites/router";
+
 const { TWITTER_API_KEY, TWITTER_API_SECRET_KEY } = process.env;
 
 const router = express.Router();
@@ -22,17 +24,7 @@ router.use((req, res, next) => {
   next();
 });
 
-router.get("/favorites", (req, res, next) => {
-  const { user } = req.session;
-  const params = { screen_name: user.screen_name, tweet_mode: "extended" };
-
-  return req.twitterClient
-    .get("favorites/list", params)
-    .then(tweets => {
-      res.send({ tweets });
-    })
-    .catch(next);
-});
+router.use("/favorites", favoritesRouter);
 
 router.get("/profile", (req, res, next) => {
   const { user } = req.session;
