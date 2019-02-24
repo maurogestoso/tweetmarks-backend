@@ -2,7 +2,7 @@ import express from "express";
 import r from "request";
 import qs from "querystring";
 import { promisify } from "util";
-import { createUser, doesUserExist } from "../users/controller";
+import User from "../users/model";
 
 const {
   TWITTER_API_KEY,
@@ -47,35 +47,38 @@ router.get("/sign-in", (req, res, next) => {
     .catch(next);
 });
 
-router.get("/callback", (req, res, next) => {
-  return postRequest({
-    url: `${TWITTER_API_BASE_URL}/oauth/access_token`,
-    oauth: {
-      verifier: req.query.oauth_verifier,
-      token: req.query.oauth_token
+router.get("/callback", async (req, res, next) => {
+  try {
+    const twitterResponse = await postRequest({
+      url: `${TWITTER_API_BASE_URL}/oauth/access_token`,
+      oauth: {
+        verifier: req.query.oauth_verifier,
+        token: req.query.oauth_token
+      }
+    });
+
+    const { oauth_token, oauth_token_secret, user_id, screen_name } = qs.parse(
+      twitterResponse.body
+    );
+
+    let user = await User.findOne({ screen_name });
+
+    if (!user) {
+      user = await new User({ screen_name, user_id }).save();
     }
-  })
-    .then(twitterResponse => {
-      const {
-        oauth_token,
-        oauth_token_secret,
-        user_id,
-        screen_name
-      } = qs.parse(twitterResponse.body);
 
-      req.session.user = {
-        screen_name,
-        user_id,
-        oauth_token,
-        oauth_token_secret
-      };
+    req.session.user = {
+      screen_name,
+      user_id,
+      oauth_token,
+      oauth_token_secret,
+      id: user._id
+    };
 
-      return doesUserExist(screen_name).then(userExists => {
-        if (!userExists) return createUser({ screen_name, user_id });
-      });
-    })
-    .then(() => res.redirect(`${FRONTEND_BASE_URL}/home`))
-    .catch(next);
+    return res.redirect(`${FRONTEND_BASE_URL}/home`);
+  } catch (err) {
+    return next(err);
+  }
 });
 
 export default router;
