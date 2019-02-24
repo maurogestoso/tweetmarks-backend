@@ -40,8 +40,8 @@ router.get("/profile", (req, res, next) => {
 
   return req.twitterClient
     .get("users/show", params)
-    .then(tweets => {
-      res.send({ tweets });
+    .then(profile => {
+      res.send({ profile });
     })
     .catch(next);
 });
