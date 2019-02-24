@@ -2,6 +2,7 @@ import express from "express";
 import r from "request";
 import qs from "querystring";
 import { promisify } from "util";
+import { createUser, doesUserExist } from "../users/controller";
 
 const {
   TWITTER_API_KEY,
@@ -69,8 +70,11 @@ router.get("/callback", (req, res, next) => {
         oauth_token_secret
       };
 
-      res.redirect(`${FRONTEND_BASE_URL}/home`);
+      return doesUserExist(screen_name).then(userExists => {
+        if (!userExists) return createUser({ screen_name, user_id });
+      });
     })
+    .then(() => res.redirect(`${FRONTEND_BASE_URL}/home`))
     .catch(next);
 });
 
