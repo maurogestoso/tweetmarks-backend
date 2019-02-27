@@ -1,3 +1,5 @@
+import "babel-polyfill";
+
 process.env.TWITTER_API_KEY = "twitter-api-key";
 process.env.TWITTER_API_SECRET_KEY = "twitter-api-secret-key";
 process.env.TWITTER_ACCESS_TOKEN = "twitter-access-token";
