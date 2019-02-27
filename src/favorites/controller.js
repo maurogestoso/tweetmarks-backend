@@ -7,21 +7,26 @@ export const getFavorites = async (req, res, next) => {
 
   try {
     const rawFavorites = await req.twitterClient.get("favorites/list", params);
-    const favorites = rawFavorites.map(fav => ({
-      id_str: fav.id_str,
-      created_at: fav.created_at,
-      user_id: user.id
+    const favoritesToSend = rawFavorites.map(tweet => ({
+      id_str: tweet.id_str,
+      created_at: tweet.created_at,
+      processed: false
     }));
+    // const favorites = rawFavorites.map(fav => ({
+    //   id_str: fav.id_str,
+    //   created_at: fav.created_at,
+    //   user_id: user.id
+    // }));
 
-    await Favorite.create(favorites);
+    // await Favorite.create(favorites);
 
-    const favoritesToSend = await Favorite.find(
-      { user_id: user.id },
-      { id_str: true, created_at: true, processed: true, _id: false }
-    )
-      .sort({ created_at: "desc" })
-      .limit(20)
-      .exec();
+    // const favoritesToSend = await Favorite.find(
+    //   { user_id: user.id },
+    //   { id_str: true, created_at: true, processed: true, _id: false }
+    // )
+    //   .sort({ created_at: "desc" })
+    //   .limit(20)
+    //   .exec();
 
     res.send({ favorites: favoritesToSend });
 
