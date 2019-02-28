@@ -2,6 +2,7 @@ import express from "express";
 import Twitter from "twitter";
 
 import favoritesRouter from "./favorites/router";
+import collectionsRouter from "./collections/router";
 
 const { TWITTER_API_KEY, TWITTER_API_SECRET_KEY } = process.env;
 
@@ -9,7 +10,6 @@ const router = express.Router();
 
 router.use((req, res, next) => {
   const { user } = req.session;
-
   if (!user || !user.oauth_token) {
     return res.status(401).send();
   }
@@ -25,6 +25,7 @@ router.use((req, res, next) => {
 });
 
 router.use("/favorites", favoritesRouter);
+router.use("/collections", collectionsRouter);
 
 router.get("/profile", (req, res, next) => {
   const { user } = req.session;
