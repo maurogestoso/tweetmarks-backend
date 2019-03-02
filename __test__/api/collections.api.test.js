@@ -4,16 +4,23 @@ import app from "../../src/app";
 import Collection from "../../src/collections/model";
 import { getAutenticatedAgent } from "../helpers";
 
-let authAgent, testUser, testCollection;
+let authAgent, testUser;
 
 beforeAll(async () => {
   await mongoose.connection.dropDatabase();
   const { agent, user } = await getAutenticatedAgent();
   authAgent = agent;
   testUser = user;
-  testCollection = await Collection.create(
-    new Collection({ name: "my collection", user_id: testUser._id })
-  );
+});
+
+beforeEach(async () => {
+  try {
+    await Collection.collection.drop("collection");
+  } catch (err) {
+    if (err.codeName !== "NamespaceNotFound") {
+      throw err;
+    }
+  }
 });
 
 test("GET /api/controllers 401s for unauthorized user", () => {
@@ -22,17 +29,18 @@ test("GET /api/controllers 401s for unauthorized user", () => {
     .expect(401);
 });
 
-test("GET /api/collections 200s with data for authorized user", () => {
-  return authAgent
-    .get("/api/collections")
-    .expect(200)
-    .then(res => {
-      expect(res.body).toHaveProperty("collections");
-      expect(res.body.collections[0]).toEqual({
-        name: "my collection",
-        _id: testCollection._id.toString()
-      });
-    });
+test("GET /api/collections 200s with data for authorized user", async () => {
+  const testCollection = await Collection.create(
+    new Collection({ name: "my collection", user_id: testUser._id })
+  );
+
+  const res = await authAgent.get("/api/collections").expect(200);
+
+  expect(res.body).toHaveProperty("collections");
+  expect(res.body.collections[0]).toEqual({
+    name: "my collection",
+    _id: testCollection._id.toString()
+  });
 });
 
 test("POST /api/collections 401s for unauthorized user", () => {
