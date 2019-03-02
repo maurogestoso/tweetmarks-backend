@@ -2,17 +2,17 @@ import supertest from "supertest";
 import mongoose from "mongoose";
 import app from "../../src/app";
 import Collection from "../../src/collections/model";
-import { getAutenticatedAgent } from "../testHelpers";
+import { getAutenticatedAgent } from "../helpers";
 
-let agent, user, collection;
+let authAgent, testUser, testCollection;
 
 beforeAll(async () => {
   await mongoose.connection.dropDatabase();
-  const r = await getAutenticatedAgent();
-  agent = r.agent;
-  user = r.user;
-  collection = await Collection.create(
-    new Collection({ name: "my collection", user_id: user._id })
+  const { agent, user } = await getAutenticatedAgent();
+  authAgent = agent;
+  testUser = user;
+  testCollection = await Collection.create(
+    new Collection({ name: "my collection", user_id: testUser._id })
   );
 });
 
@@ -23,14 +23,14 @@ test("GET /api/controllers 401s for unauthorized user", () => {
 });
 
 test("GET /api/collections 200s with data for authorized user", () => {
-  return agent
+  return authAgent
     .get("/api/collections")
     .expect(200)
     .then(res => {
       expect(res.body).toHaveProperty("collections");
       expect(res.body.collections[0]).toEqual({
         name: "my collection",
-        _id: collection._id.toString()
+        _id: testCollection._id.toString()
       });
     });
 });
@@ -42,7 +42,7 @@ test("POST /api/collections 401s for unauthorized user", () => {
 });
 
 test("POST /api/collections 400s if name key not provided", () => {
-  return agent
+  return authAgent
     .post("/api/collections")
     .expect(400)
     .then(res => {
@@ -51,7 +51,7 @@ test("POST /api/collections 400s if name key not provided", () => {
 });
 
 test("POST /api/collections 201s when sent valid data", () => {
-  return agent
+  return authAgent
     .post("/api/collections")
     .send({ name: "new collection" })
     .expect(201);
