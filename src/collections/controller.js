@@ -28,3 +28,22 @@ export const createCollection = (req, res) => {
     })
     .catch(err => {});
 };
+
+export const deleteCollection = async (req, res, next) => {
+  const { collectionId } = req.params;
+
+  try {
+    const result = await Collection.findByIdAndDelete(collectionId);
+    if (!result) {
+      return res.status(status.NOT_FOUND).end();
+    }
+    return res.status(status.NO_CONTENT).end();
+  } catch (err) {
+    if (err.name === "CastError" && err.kind === "ObjectId") {
+      return res
+        .status(status.BAD_REQUEST)
+        .send({ error: { message: "Invalid collection id" } });
+    }
+    return next(err);
+  }
+};

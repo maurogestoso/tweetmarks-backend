@@ -23,7 +23,7 @@ beforeEach(async () => {
   }
 });
 
-test("GET /api/controllers 401s for unauthorized user", () => {
+test("GET /api/controllers 401s for an unauthorised user", () => {
   return supertest(app)
     .get("/api/collections")
     .expect(401);
@@ -43,7 +43,7 @@ test("GET /api/collections 200s with data for authorized user", async () => {
   });
 });
 
-test("POST /api/collections 401s for unauthorized user", () => {
+test("POST /api/collections 401s for an unauthorised user", () => {
   return supertest(app)
     .post("/api/collections")
     .expect(401);
@@ -63,4 +63,36 @@ test("POST /api/collections 201s when sent valid data", () => {
     .post("/api/collections")
     .send({ name: "new collection" })
     .expect(201);
+});
+
+test("DELETE /api/collections/:id 401s for an unauthorised user", () => {
+  return supertest(app)
+    .delete(`/api/collections/${mongoose.Types.ObjectId()}`)
+    .expect(401);
+});
+
+test("DELETE /api/collections/:id 404s for a non-existing collection", () => {
+  return authAgent
+    .delete(`/api/collections/${mongoose.Types.ObjectId()}`)
+    .expect(404);
+});
+
+test("DELETE /api/collections/:id deletes the specified collection", async () => {
+  const testCollection = await Collection.create(
+    new Collection({ name: "my collection", user_id: testUser._id })
+  );
+
+  await authAgent.delete(`/api/collections/${testCollection._id}`).expect(204);
+
+  const result = await Collection.findById(testCollection._id);
+
+  expect(result).toBeNull();
+});
+
+test("DELETE /api/collections/:id 400s for an invalid collection id", async () => {
+  const { body } = await authAgent
+    .delete(`/api/collections/undefined`)
+    .expect(400);
+
+  expect(body.error.message).toBe("Invalid collection id");
 });
