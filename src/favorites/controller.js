@@ -14,9 +14,9 @@ export const getFavorites = async (req, res, next) => {
     };
     const favoritesFromTwitter = await listFavorites(req.twitterClient, params);
 
-    await createFavorites(user, favoritesFromTwitter);
+    await saveFavorites(user, favoritesFromTwitter);
 
-    const favoritesFromDb = await Favorite.find({
+    const favoritesToSend = await Favorite.find({
       user_id: user.id,
       processed: false
     })
@@ -29,9 +29,9 @@ export const getFavorites = async (req, res, next) => {
       userUpdates.newest_id = favoritesFromTwitter[0].id_str;
 
       // this means that the fetched favorites are the oldest favorites
-      if (favoritesFromDb.length === favoritesFromTwitter.length) {
+      if (favoritesToSend.length === favoritesFromTwitter.length) {
         userUpdates.oldest_id =
-          favoritesFromDb[favoritesFromDb.length - 1].id_str;
+          favoritesToSend[favoritesToSend.length - 1].id_str;
       }
     }
 
@@ -39,13 +39,13 @@ export const getFavorites = async (req, res, next) => {
       await User.findByIdAndUpdate(user.id, userUpdates);
     }
 
-    res.send({ favorites: favoritesFromDb });
+    res.send({ favorites: favoritesToSend });
   } catch (err) {
     next(err);
   }
 };
 
-const createFavorites = (user, favorites) => {
+const saveFavorites = (user, favorites) => {
   return Favorite.create(
     favorites.map(
       fav =>
