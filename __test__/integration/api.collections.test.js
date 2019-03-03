@@ -17,7 +17,7 @@ beforeEach(async () => {
   try {
     await Collection.collection.drop("collection");
   } catch (err) {
-    if (err.codeName !== "NamespaceNotFound") {
+    if (err.codeName !== "NamespaceNotFound" && err.code !== 26) {
       throw err;
     }
   }
