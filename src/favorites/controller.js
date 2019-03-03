@@ -9,7 +9,11 @@ export const getFavorites = async (req, res, next) => {
   // else -> don't add to twtter request params
 
   const { user } = req.session;
+
+  const authUser = await User.findById(user.id);
+
   const params = { screen_name: user.screen_name };
+  if (authUser.newest_id) params.since_id = authUser.newest_id;
 
   const newFavorites = await listFavorites(req.twitterClient, params);
 
