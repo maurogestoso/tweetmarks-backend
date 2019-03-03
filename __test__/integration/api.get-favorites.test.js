@@ -35,7 +35,7 @@ test("401s for an unauthorised user", () => {
     .expect(401);
 });
 
-test("200s with an empty list when there are no favorites to be processed", async () => {
+test("responds with an empty list when there are no favorites to be processed", async () => {
   listFavorites.mockResolvedValueOnce([]);
 
   const { body } = await authAgent.get("/api/favorites").expect(200);
@@ -58,22 +58,6 @@ test("responds with favorites from Twitter when the user hasn't fetched before",
   const [, params] = listFavorites.mock.calls[0];
   expect(params).toEqual({
     screen_name: testUser.screen_name
-  });
-});
-
-test("fetches favorites since the last id the user has fetched", async () => {
-  const mockId = "mock-id";
-  await User.findOneAndUpdate({ _id: testUser.id }, { newest_id: mockId });
-
-  const mockFavorites = createMockFavorites(5);
-  listFavorites.mockResolvedValueOnce(mockFavorites);
-
-  await authAgent.get("/api/favorites").expect(200);
-
-  const [, params] = listFavorites.mock.calls[0];
-  expect(params).toEqual({
-    screen_name: testUser.screen_name,
-    since_id: mockId
   });
 });
 
@@ -104,4 +88,31 @@ test("responds with a mix of favorites from Twitter and from the database", asyn
   body.favorites.slice(5).forEach((fav, i) => {
     expect(fav.str_id).toBe(mockFavoritesFromDatabase[i].str_id);
   });
+});
+
+test("fetches favorites since the last id the user has fetched", async () => {
+  const mockId = "mock-id";
+  await User.findOneAndUpdate({ _id: testUser.id }, { newest_id: mockId });
+
+  const mockFavorites = createMockFavorites(5);
+  listFavorites.mockResolvedValueOnce(mockFavorites);
+
+  await authAgent.get("/api/favorites").expect(200);
+
+  const [, params] = listFavorites.mock.calls[0];
+  expect(params).toEqual({
+    screen_name: testUser.screen_name,
+    since_id: mockId
+  });
+});
+
+test("sets the user's newest_id to the id of the most recent favorite", async () => {
+  const mockFavorites = createMockFavorites(5);
+  listFavorites.mockResolvedValueOnce(mockFavorites);
+
+  await authAgent.get("/api/favorites").expect(200);
+
+  const user = await User.findById(testUser.id);
+
+  expect(user.newest_id).toBe(mockFavorites[0].id_str);
 });

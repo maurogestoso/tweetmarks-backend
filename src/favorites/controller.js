@@ -2,41 +2,45 @@ import Favorite from "./model";
 import User from "../users/model";
 import { listFavorites } from "../twitter";
 
+const PAGE_SIZE = 20;
+
 export const getFavorites = async (req, res, next) => {
-  // TODO
-  // get newest_id from user
-  // if newest_id -> add to twitter request params
-  // else -> don't add to twtter request params
+  try {
+    const { user } = req.session;
+    const { newest_id } = await User.findById(user.id);
+    const params = {
+      screen_name: user.screen_name,
+      since_id: newest_id || undefined
+    };
+    const newFavorites = await listFavorites(req.twitterClient, params);
 
-  const { user } = req.session;
+    await Favorite.create(
+      newFavorites.map(
+        fav =>
+          new Favorite({
+            user_id: user.id,
+            created_at: fav.created_at,
+            id_str: fav.id_str,
+            processed: false
+          })
+      )
+    );
 
-  const authUser = await User.findById(user.id);
+    if (newFavorites.length) {
+      await User.findByIdAndUpdate(user.id, {
+        newest_id: newFavorites[0].id_str
+      });
+    }
 
-  const params = { screen_name: user.screen_name };
-  if (authUser.newest_id) params.since_id = authUser.newest_id;
-
-  const newFavorites = await listFavorites(req.twitterClient, params);
-
-  // save requested tweets in DB
-  await Favorite.create(
-    newFavorites.map(f => ({
+    const latestFavorites = await Favorite.find({
       user_id: user.id,
-      created_at: f.created_at,
-      str_id: f.str_id,
       processed: false
-    }))
-  );
+    })
+      .sort("-created_at")
+      .limit(PAGE_SIZE);
 
-  // TODO
-  // save new newest_id
-
-  // respond with top 20 tweets processed=false
-  const latestFavorites = await Favorite.find({
-    user_id: user.id,
-    processed: false
-  })
-    .sort({ created_at: "desc" })
-    .limit(20);
-
-  res.send({ favorites: latestFavorites });
+    res.send({ favorites: latestFavorites });
+  } catch (err) {
+    next(err);
+  }
 };
