@@ -24,7 +24,12 @@ export const createCollection = (req, res) => {
   newCollection
     .save()
     .then(() => {
-      return res.status(201).send({ collection: newCollection });
+      return res.status(201).send({
+        collection: {
+          _id: newCollection._id,
+          name: newCollection.name
+        }
+      });
     })
     .catch(err => {});
 };
