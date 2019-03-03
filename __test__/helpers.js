@@ -29,3 +29,10 @@ export const getAutenticatedAgent = async () => {
   const user = await User.findOne({ screen_name: "test_user" });
   return { agent, user };
 };
+
+export const createMockFavorites = num => {
+  return Array.from({ length: num }, (v, k) => k).map(i => ({
+    id_str: i.toString(),
+    created_at: new Date(Date.now() + i * 1000)
+  }));
+};
