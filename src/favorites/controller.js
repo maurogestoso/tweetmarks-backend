@@ -1,40 +1,38 @@
 import Favorite from "./model";
 import User from "../users/model";
+import { listFavorites } from "../twitter";
 
 export const getFavorites = async (req, res, next) => {
+  // TODO
+  // get newest_id from user
+  // if newest_id -> add to twitter request params
+  // else -> don't add to twtter request params
+
   const { user } = req.session;
-  const params = { screen_name: user.screen_name, tweet_mode: "extended" };
+  const params = { screen_name: user.screen_name };
 
-  try {
-    const rawFavorites = await req.twitterClient.get("favorites/list", params);
-    const favoritesToSend = rawFavorites.map(tweet => ({
-      id_str: tweet.id_str,
-      created_at: tweet.created_at,
+  const newFavorites = await listFavorites(req.twitterClient, params);
+
+  // save requested tweets in DB
+  await Favorite.create(
+    newFavorites.map(f => ({
+      user_id: user.id,
+      created_at: f.created_at,
+      str_id: f.str_id,
       processed: false
-    }));
-    // const favorites = rawFavorites.map(fav => ({
-    //   id_str: fav.id_str,
-    //   created_at: fav.created_at,
-    //   user_id: user.id
-    // }));
+    }))
+  );
 
-    // await Favorite.create(favorites);
+  // TODO
+  // save new newest_id
 
-    // const favoritesToSend = await Favorite.find(
-    //   { user_id: user.id },
-    //   { id_str: true, created_at: true, processed: true, _id: false }
-    // )
-    //   .sort({ created_at: "desc" })
-    //   .limit(20)
-    //   .exec();
+  // respond with top 20 tweets processed=false
+  const latestFavorites = await Favorite.find({
+    user_id: user.id,
+    processed: false
+  })
+    .sort({ created_at: "desc" })
+    .limit(20);
 
-    res.send({ favorites: favoritesToSend });
-
-    await User.findByIdAndUpdate(user.id, {
-      newest_id: favoritesToSend[0].id_str,
-      oldest_id: favoritesToSend[favoritesToSend.length - 1].id_str
-    });
-  } catch (err) {
-    return next(err);
-  }
+  res.send({ favorites: latestFavorites });
 };
