@@ -4,7 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test:integration": "jest __test__/integration --runInBand",
+    "test:integration": "jest __test__/integration/*.test.js --runInBand",
+    "test:unit": "jest __test__/unit/**/*.test.js",
     "dev": "nodemon --exec babel-node src/index.js"
   },
   "keywords": [],
