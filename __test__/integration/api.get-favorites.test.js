@@ -9,24 +9,25 @@ import Favorite from "../../src/favorites/model";
 
 jest.mock("../../src/twitter");
 
-beforeAll(() => {
-  return mongoose.connection.dropDatabase();
-});
-
-let authAgent, testUser;
-beforeEach(async () => {
-  listFavorites.mockReset();
-  try {
-    const { agent, user } = await getAutenticatedAgent();
-    authAgent = agent;
-    testUser = user;
-
-    await Favorite.collection.drop();
-  } catch (err) {
+const dropFavorites = () => {
+  return Favorite.collection.drop().catch(err => {
     if (err.codeName !== "NamespaceNotFound" && err.code !== 26) {
       throw err;
     }
-  }
+});
+};
+
+let authAgent, testUser;
+beforeAll(async () => {
+    await mongoose.connection.dropDatabase();
+    const { agent, user } = await getAutenticatedAgent();
+    authAgent = agent;
+    testUser = user;
+});
+
+beforeEach(async () => {
+  listFavorites.mockReset();
+    await dropFavorites();
 });
 
 test("401s for an unauthorised user", () => {
