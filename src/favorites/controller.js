@@ -12,35 +12,49 @@ export const getFavorites = async (req, res, next) => {
       screen_name: user.screen_name,
       since_id: newest_id || undefined
     };
-    const newFavorites = await listFavorites(req.twitterClient, params);
+    const favoritesFromTwitter = await listFavorites(req.twitterClient, params);
 
-    await Favorite.create(
-      newFavorites.map(
-        fav =>
-          new Favorite({
-            user_id: user.id,
-            created_at: fav.created_at,
-            id_str: fav.id_str,
-            processed: false
-          })
-      )
-    );
+    await createFavorites(user, favoritesFromTwitter);
 
-    if (newFavorites.length) {
-      await User.findByIdAndUpdate(user.id, {
-        newest_id: newFavorites[0].id_str
-      });
-    }
-
-    const latestFavorites = await Favorite.find({
+    const favoritesFromDb = await Favorite.find({
       user_id: user.id,
       processed: false
     })
       .sort("-created_at")
       .limit(PAGE_SIZE);
 
-    res.send({ favorites: latestFavorites });
+    const userUpdates = {};
+
+    if (favoritesFromTwitter.length) {
+      userUpdates.newest_id = favoritesFromTwitter[0].id_str;
+
+      // this means that the fetched favorites are the oldest favorites
+      if (favoritesFromDb.length === favoritesFromTwitter.length) {
+        userUpdates.oldest_id =
+          favoritesFromDb[favoritesFromDb.length - 1].id_str;
+      }
+    }
+
+    if ("newest_id" in userUpdates || "oldest_id" in userUpdates) {
+      await User.findByIdAndUpdate(user.id, userUpdates);
+    }
+
+    res.send({ favorites: favoritesFromDb });
   } catch (err) {
     next(err);
   }
+};
+
+const createFavorites = (user, favorites) => {
+  return Favorite.create(
+    favorites.map(
+      fav =>
+        new Favorite({
+          user_id: user.id,
+          created_at: fav.created_at,
+          id_str: fav.id_str,
+          processed: false
+        })
+    )
+  );
 };

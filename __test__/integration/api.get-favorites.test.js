@@ -117,3 +117,19 @@ test("sets the user's newest_id to the id of the most recent favorite", async ()
 
   expect(user.newest_id).toBe(mockFavorites[0].id_str);
 });
+
+describe("sets the user's oldest_id to the last favorite fetched", () => {
+  beforeEach(() => dropFavorites());
+
+  test("when there are no favorites in the database", async () => {
+    const mockFavorites = createMockFavorites(5);
+    const oldestFavorite = mockFavorites[0];
+    listFavorites.mockResolvedValueOnce(mockFavorites);
+
+    await authAgent.get("/api/favorites").expect(200);
+
+    const { oldest_id } = await User.findById(testUser.id);
+    expect(oldest_id).toBe(oldestFavorite.id_str);
+  });
+});
+
