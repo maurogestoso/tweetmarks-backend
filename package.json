@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "PORT=3001 jest",
+    "test:integration": "jest __test__/integration --runInBand",
     "dev": "nodemon --exec babel-node src/index.js"
   },
   "keywords": [],
