@@ -195,3 +195,36 @@ const saveFavorites = (user, favorites) => {
     )
   );
 };
+
+export const updateFavorite = async (req, res) => {
+  const favoriteId = req.params.id;
+
+  const updates = {};
+  if (req.body.processed !== undefined) {
+    updates.processed = req.body.processed;
+  }
+  if (req.body.collection_id !== undefined) {
+    updates.collection_id = req.body.collection_id;
+    updates.processed = true;
+  }
+
+  try {
+    const favorite = await Favorite.findByIdAndUpdate(favoriteId, updates);
+    if (favorite === null) {
+      return res.status(404).send();
+    }
+
+    return res.status(200).end();
+  } catch (e) {
+    if (e.name === "CastError") {
+      res.status(400);
+      if (e.path === "_id") {
+        return res.send({ message: "id parameter is invalid" });
+      } else if (e.path === "collection_id") {
+        return res.send({ message: "collection_id is invalid" });
+      }
+    }
+
+    return res.status(500).send({ message: "Something went wrong" });
+  }
+};
