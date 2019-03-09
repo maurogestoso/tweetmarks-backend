@@ -155,4 +155,90 @@ describe("with no before_id query parameter", () => {
       });
     });
   });
+
+  describe("with a bottom_range and no top_range", () => {
+    describe("when there is less than a full page of unseen favorites from Twitter", () => {
+      let fromTwitter, fromDb, mockFavorites, initialBottomRange;
+      beforeEach(async () => {
+        mockFavorites = createMockFavorites(25);
+        fromTwitter = mockFavorites.slice(0, 5);
+        fromDb = mockFavorites.slice(5);
+        listFavorites.mockResolvedValueOnce(fromTwitter);
+        initialBottomRange = {
+          newest_id: fromDb[0].id_str,
+          oldest_id: fromDb[fromDb.length - 1].id_str
+        };
+
+        await User.findByIdAndUpdate(testUser._id, {
+          bottom_range: initialBottomRange
+        });
+        await createFavorites(testUser, fromDb);
+      });
+
+      test("responds with 20 favorites from Twitter & the DB", async () => {
+        const { body } = await authAgent.get("/api/favorites").expect(200);
+        expect(body.favorites).toHaveLength(20);
+
+        // The top 5 should be from Twitter
+        body.favorites.slice(0, 5).forEach((f, i) => {
+          expect(f).toHaveProperty("id_str");
+          expect(f.id_str).toBe(fromTwitter[i].id_str);
+        });
+
+        // The bottom 15 should be the top 15 from the DB
+        body.favorites.slice(5).forEach((f, i) => {
+          expect(f).toHaveProperty("id_str");
+          expect(f.id_str).toBe(fromDb[i].id_str);
+        });
+      });
+
+      test("calls the twitter API with the correct since_id", async () => {
+        const expectedSinceId = (await User.findById(testUser._id)).bottom_range
+          .newest_id;
+        await authAgent.get("/api/favorites").expect(200);
+        const [, params] = listFavorites.mock.calls[0];
+        expect(params).toEqual({
+          screen_name: testUser.screen_name,
+          since_id: expectedSinceId
+        });
+      });
+
+      test("saves the new favorites in the database", async () => {
+        await authAgent.get("/api/favorites").expect(200);
+        const savedFavorites = await Favorite.find({
+          user_id: testUser._id,
+          processed: false
+        })
+          .sort("-created_at")
+          .lean();
+
+        expect(savedFavorites).toHaveLength(mockFavorites.length);
+        savedFavorites.forEach((fav, i) => {
+          expect(fav.processed).toBe(false);
+          expect(fav.user_id).toEqual(testUser._id);
+          expect(fav.id_str).toBe(mockFavorites[i].id_str);
+        });
+      });
+
+      test("updates the bottom_range newest_id", async () => {
+        await authAgent.get("/api/favorites").expect(200);
+        const { bottom_range, top_range } = await User.findById(
+          testUser._id
+        ).lean();
+        expect(bottom_range).toEqual({
+          newest_id: fromTwitter[0].id_str,
+          oldest_id: initialBottomRange.oldest_id
+        });
+
+        expect(top_range).toEqual({
+          newest_id: null,
+          oldest_id: null
+        });
+      });
+    });
+
+    describe("when there is more than a full page of unseen favorites from Twitter", () => {});
+  });
+
+  describe("with a bottom_range and a top_range", () => {});
 });
