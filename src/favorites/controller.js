@@ -8,53 +8,34 @@ const TWITTER_FETCH_SIZE = 20;
 export const getFavorites = async (req, res) => {
   if (!req.query.before_id) {
     const favorites = [];
-    const batch = await getNextBatch(req, {});
 
-    favorites.push(...batch);
-    if (favorites.length === 0) {
-      return res.status(200).send({ favorites: batch });
-    }
+    while (favorites.length < PAGE_SIZE) {
+      const oldestFavorite = favorites.length
+        ? favorites[favorites.length - 1]
+        : null;
+      const batch = await getNextBatch(req, oldestFavorite);
+      favorites.push(...batch);
 
-    const rangeCount = await Range.countDocuments({
-      user_id: req.session.user.id
-    });
-    // We only have 1 range; the one we just saved
-    if (rangeCount === 1) {
-      return res.status(200).send({ favorites: favorites });
-    }
+      // No favorites found on Twitter
+      if (favorites.length === 0) {
+        return res.status(200).send({ favorites: batch });
+      }
 
-    if (favorites.length < PAGE_SIZE) {
-      const batch2 = await getNextBatch(req, {
-        max_id: batch[batch.length - 1].id_str,
-        index: 1,
-        oldestFavorite: favorites[favorites.length - 1]
+      const rangeCount = await Range.countDocuments({
+        user_id: req.session.user.id
       });
-      favorites.push(...batch2);
+      // We only have 1 range; the one we just saved - so we've got all the Tweets we possibly could get from Twitter, no point continuing/
+      if (rangeCount === 1) {
+        return res.status(200).send({ favorites: favorites });
+      }
     }
 
     // respond
     return res.status(200).send({ favorites: favorites.slice(0, 20) });
   }
-
-  // get the newest range (if exists)
-  // Get oldest tweet, is it in the above range?
-  // yes, it's IN the range
-  // find the overlap
-  // Save any new tweets to the DB
-  // extend range (later extract to Consolidate_Ranges?)
-  // no, it's older than the range
-  // save tweets without overwriting
-  // Save the new range
-  // Later, Consolidate_ranges
-  // if no
-  // save the tweets to DB
-  // save a new range
-
-  // Consolidate ranges
-  // This logic takes a start and end of a range, and looks through all the ranges which fall in this period, and consolidates them if it can.
 };
 
-const getNextBatch = async (req, { max_id, oldestFavorite }) => {
+const getNextBatch = async (req, oldestFavorite) => {
   const { user: sessionUser } = req.session;
   const { twitterClient } = req;
 
@@ -64,7 +45,7 @@ const getNextBatch = async (req, { max_id, oldestFavorite }) => {
     count: TWITTER_FETCH_SIZE
   };
 
-  if (max_id) twitterParams.max_id = max_id;
+  if (oldestFavorite) twitterParams.max_id = oldestFavorite.max_id;
   // if we have a range, get the newest and use as the since_id
   const topRange = oldestFavorite
     ? (await Range.find({
