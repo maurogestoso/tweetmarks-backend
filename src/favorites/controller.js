@@ -6,59 +6,34 @@ const PAGE_SIZE = 20;
 const TWITTER_FETCH_SIZE = 20;
 
 export const getFavorites = async (req, res) => {
-  const { user: sessionUser } = req.session;
-  const { twitterClient } = req;
-
-  // if there is no param
-  const twitterParams = {
-    screen_name: sessionUser.screen_name,
-    count: TWITTER_FETCH_SIZE
-  };
-
   if (!req.query.before_id) {
-    // if we have a range, get the newest and use as the since_id
-    const topRange = (await Range.find({ user_id: sessionUser.id })
-      .sort("-start_time")
-      .limit(1))[0];
+    const favorites = [];
+    const batch = await getNextBatch(req, {});
 
-    if (topRange) {
-      twitterParams.since_id = topRange.start_id;
+    favorites.push(...batch);
+    if (favorites.length === 0) {
+      return res.status(200).send({ favorites: batch });
     }
 
-    // Fetch as many as possible (up to 20) from Twitter since_id
-    const favoritesFromTwitter = await listFavorites(
-      twitterClient,
-      twitterParams
-    );
-
-    if (favoritesFromTwitter.length) {
-      // Save a new range
-      await new Range({
-        user_id: sessionUser.id,
-        start_id: favoritesFromTwitter[0].id_str,
-        start_time: favoritesFromTwitter[0].created_at,
-        end_id: favoritesFromTwitter[favoritesFromTwitter.length - 1].id_str,
-        end_time:
-          favoritesFromTwitter[favoritesFromTwitter.length - 1].created_at
-      }).save();
+    const rangeCount = await Range.countDocuments({
+      user_id: req.session.user.id
+    });
+    // We only have 1 range; the one we just saved
+    if (rangeCount === 1) {
+      return res.status(200).send({ favorites: favorites });
     }
 
-    // Save Tweets to DB
-    await saveFavorites(sessionUser, favoritesFromTwitter);
-
-    // Get the last 20 from DB, only more recent than the end of the top range
-    const favoritesFromDb = await Favorite.find({
-      user_id: sessionUser.id,
-      processed: false
-      // created_at: {
-      //   $gte: topRange.end_time
-      // }
-    })
-      .sort("-created_at")
-      .limit(PAGE_SIZE);
+    if (favorites.length < PAGE_SIZE) {
+      const batch2 = await getNextBatch(req, {
+        max_id: batch[batch.length - 1].id_str,
+        index: 1,
+        oldestFavorite: favorites[favorites.length - 1]
+      });
+      favorites.push(...batch2);
+    }
 
     // respond
-    return res.status(200).send({ favorites: favoritesFromDb });
+    return res.status(200).send({ favorites: favorites.slice(0, 20) });
   }
 
   // get the newest range (if exists)
@@ -77,6 +52,77 @@ export const getFavorites = async (req, res) => {
 
   // Consolidate ranges
   // This logic takes a start and end of a range, and looks through all the ranges which fall in this period, and consolidates them if it can.
+};
+
+const getNextBatch = async (req, { max_id, oldestFavorite }) => {
+  const { user: sessionUser } = req.session;
+  const { twitterClient } = req;
+
+  // if there is no param
+  const twitterParams = {
+    screen_name: sessionUser.screen_name,
+    count: TWITTER_FETCH_SIZE
+  };
+
+  if (max_id) twitterParams.max_id = max_id;
+  // if we have a range, get the newest and use as the since_id
+  const topRange = oldestFavorite
+    ? (await Range.find({
+        user_id: sessionUser.id,
+        start_time: { $lt: oldestFavorite.created_at }
+      })
+        .sort("-start_time")
+        .limit(1))[0]
+    : (await Range.find({ user_id: sessionUser.id })
+        .sort("-start_time")
+        .limit(1))[0];
+
+  if (topRange) {
+    twitterParams.since_id = topRange.start_id;
+  }
+
+  // Fetch as many as possible (up to 20) from Twitter since_id
+  const favoritesFromTwitter = await listFavorites(
+    twitterClient,
+    twitterParams
+  );
+
+  if (favoritesFromTwitter.length) {
+    // Save a new range
+    await new Range({
+      user_id: sessionUser.id,
+      start_id: favoritesFromTwitter[0].id_str,
+      start_time: favoritesFromTwitter[0].created_at,
+      end_id: favoritesFromTwitter[favoritesFromTwitter.length - 1].id_str,
+      end_time: favoritesFromTwitter[favoritesFromTwitter.length - 1].created_at
+    }).save();
+  }
+
+  // Save Tweets to DB
+  await saveFavorites(sessionUser, favoritesFromTwitter);
+
+  // Get the last 20 from DB, only more recent than the end of the top range
+  const query = {
+    user_id: sessionUser.id,
+    processed: false
+  };
+
+  if (topRange) {
+    query.created_at = {
+      $gte: topRange.end_time
+    };
+  }
+
+  if (oldestFavorite) {
+    query.created_at = {
+      ...query.created_at,
+      $lt: favoritesFromTwitter[0].created_at
+    };
+  }
+
+  return await Favorite.find(query)
+    .sort("-created_at")
+    .limit(PAGE_SIZE);
 };
 
 const saveFavorites = (user, favorites) => {

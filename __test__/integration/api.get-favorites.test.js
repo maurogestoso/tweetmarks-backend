@@ -153,7 +153,9 @@ describe("with no before_id query parameter", () => {
       });
 
       beforeEach(() => {
-        listFavorites.mockResolvedValueOnce(mockFavorites);
+        listFavorites
+          .mockResolvedValueOnce(mockFavorites)
+          .mockResolvedValueOnce([]);
       });
 
       test("responds with 5 favorites fetched from Twitter", async () => {
@@ -287,6 +289,53 @@ describe("with no before_id query parameter", () => {
         expect(range.end_id).toBe(bottomMockFavorite.id_str);
         expect(range.end_time).toEqual(bottomMockFavorite.created_at);
       });
+    });
+
+    describe("when there is more data in the DB but not enough to satisfy demand", () => {
+      let mockFavorites,
+        twitterFavorites1,
+        twitterFavorites2,
+        dbFavorites,
+        topRange;
+
+      beforeAll(() => {
+        mockFavorites = createMockFavorites(30);
+        twitterFavorites1 = mockFavorites.slice(0, 5);
+        dbFavorites = mockFavorites.slice(5, 10);
+        twitterFavorites2 = mockFavorites.slice(9);
+      });
+
+      beforeEach(async () => {
+        await saveFavorites(testUser, dbFavorites);
+        topRange = await new Range({
+          user_id: testUser._id,
+          start_time: dbFavorites[0].created_at,
+          start_id: dbFavorites[0].id_str,
+          end_time: dbFavorites[dbFavorites.length - 1].created_at,
+          end_id: dbFavorites[dbFavorites.length - 1].id_str
+        }).save();
+
+        listFavorites
+          .mockResolvedValueOnce(twitterFavorites1)
+          .mockResolvedValueOnce(twitterFavorites2);
+      });
+
+      test("responds with data from Twitter (fetched twice) and the DB", async () => {
+        const { body } = await authAgent.get("/api/favorites").expect(200);
+        expect(body.favorites).toHaveLength(20);
+
+        body.favorites.forEach((fav, i) => {
+          expect(fav).toHaveProperty("id_str");
+          expect(fav.processed).toBe(false);
+          expect(fav.id_str).toBe(mockFavorites[i].id_str);
+        });
+      });
+
+      test("saves the fetched favorites in the database", () => {});
+
+      test("requests the Twitter API twice with the correct params", () => {});
+
+      test("adds the fetched range to the list of ranges", () => {});
     });
   });
 });
