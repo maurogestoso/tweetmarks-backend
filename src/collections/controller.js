@@ -12,7 +12,7 @@ export const getCollections = (req, res, next) => {
     });
 };
 
-export const createCollection = (req, res) => {
+export const createCollection = (req, res, next) => {
   const { name } = req.body;
   if (!name) {
     return res.status(status.BAD_REQUEST).send({ message: "Name is required" });
@@ -26,7 +26,9 @@ export const createCollection = (req, res) => {
     .then(() => {
       return res.status(201).send({ collection: newCollection });
     })
-    .catch(err => {});
+    .catch(err => {
+      next(err);
+    });
 };
 
 export const deleteCollection = async (req, res, next) => {

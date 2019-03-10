@@ -1,15 +1,13 @@
 import Favorite from "./model";
-import User from "../users/model";
 import Range from "../ranges/model";
 import { listFavorites } from "../twitter";
 
 const PAGE_SIZE = 20;
 const TWITTER_FETCH_SIZE = 20;
 
-export const getFavorites = async (req, res, next) => {
+export const getFavorites = async (req, res) => {
   const { user: sessionUser } = req.session;
   const { twitterClient } = req;
-  const dbUser = await User.findById(sessionUser.id);
 
   // if there is no param
   const twitterParams = {
