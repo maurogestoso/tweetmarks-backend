@@ -11,8 +11,6 @@ export const getFavorites = async (req, res, next) => {
   const { twitterClient } = req;
   const dbUser = await User.findById(sessionUser.id);
 
-  // TODO: function should keep querying twitter until it gets 20
-
   // if there is no param
   const twitterParams = {
     screen_name: sessionUser.screen_name,
