@@ -97,7 +97,7 @@ const getNextBatch = async (req, oldestFavorite) => {
   if (oldestFavorite) {
     query.created_at = {
       ...query.created_at,
-      $lt: favoritesFromTwitter[0].created_at
+      $lte: favoritesFromTwitter[0].created_at
     };
   }
 

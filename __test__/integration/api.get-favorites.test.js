@@ -302,7 +302,7 @@ describe("with no before_id query parameter", () => {
         mockFavorites = createMockFavorites(30);
         twitterFavorites1 = mockFavorites.slice(0, 5);
         dbFavorites = mockFavorites.slice(5, 10);
-        twitterFavorites2 = mockFavorites.slice(9);
+        twitterFavorites2 = mockFavorites.slice(10);
       });
 
       beforeEach(async () => {
@@ -331,11 +331,57 @@ describe("with no before_id query parameter", () => {
         });
       });
 
-      test("saves the fetched favorites in the database", () => {});
+      test("saves the fetched favorites in the database", async () => {
+        await authAgent.get("/api/favorites").expect(200);
+        const favesFromDb = await Favorite.find({ user_id: testUser._id }).sort(
+          "-created_at"
+        );
+        expect(favesFromDb).toHaveLength(30);
+        favesFromDb.forEach((fav, i) => {
+          expect(fav.id_str).toBe(mockFavorites[i].id_str);
+        });
+      });
 
-      test("requests the Twitter API twice with the correct params", () => {});
+      test("requests the Twitter API twice with the correct params", async () => {
+        await authAgent.get("/api/favorites").expect(200);
+        let [, params] = listFavorites.mock.calls[0];
+        expect(params).toEqual({
+          screen_name: testUser.screen_name,
+          count: 20,
+          since_id: topRange.start_id
+        });
+        [, params] = listFavorites.mock.calls[1];
+        expect(params).toEqual({
+          screen_name: testUser.screen_name,
+          count: 20,
+          max_id: dbFavorites[dbFavorites.length - 1].max_id
+        });
+      });
 
-      test("adds the fetched range to the list of ranges", () => {});
+      test("adds the fetched range to the list of ranges", async () => {
+        await authAgent.get("/api/favorites").expect(200);
+        const ranges = await Range.find({ user_id: testUser._id }).sort(
+          "-start_time"
+        );
+        expect(ranges).toHaveLength(3);
+        // The first range which was saved when 1st Twitter results were fetched
+        expect(ranges[0].start_id).toBe(twitterFavorites1[0].id_str);
+        expect(ranges[0].end_id).toBe(
+          twitterFavorites1[twitterFavorites1.length - 1].id_str
+        );
+
+        // The range that was already in the DB
+        expect(ranges[1].start_id).toBe(dbFavorites[0].id_str);
+        expect(ranges[1].end_id).toBe(
+          dbFavorites[dbFavorites.length - 1].id_str
+        );
+
+        // The range that was created after the second call to Twitter
+        expect(ranges[2].start_id).toBe(twitterFavorites2[0].id_str);
+        expect(ranges[2].end_id).toBe(
+          twitterFavorites2[twitterFavorites2.length - 1].id_str
+        );
+      });
     });
   });
 });
