@@ -6,7 +6,14 @@ const PAGE_SIZE = 20;
 const TWITTER_FETCH_SIZE = 20;
 
 export const getFavorites = async (req, res) => {
-  if (!req.query.before_id) {
+  if (req.query.before_id !== undefined) {
+    try {
+      const favorites = await findTweetsOlderThan(req);
+      return res.status(200).send({ favorites });
+    } catch (e) {
+      console.log(e);
+    }
+  } else {
     const favorites = [];
 
     while (favorites.length < PAGE_SIZE) {
@@ -35,6 +42,20 @@ export const getFavorites = async (req, res) => {
   }
 };
 
+/**
+ * Returns up to PAGE_SIZE Tweets, from Twitter or the DB.
+ *
+ * When not passed an oldestFavorite it will assume that it should fetch the newest
+ * tweets it can from Twitter which are newer than the newest range in the DB,
+ * supplemented by further Tweets from the DB to make up the PAGE_SIZE if required, and available.
+ *
+ * When passed an oldestFavorite, it will query Twitter for any Tweets newer than the
+ * given Favorite. Again, the returned tweets will be supplemented by further older Tweets
+ * from the DB to make up the PAGE_SIZE if required, and available.
+ *
+ * @param {Object} req The request object
+ * @param {Favorite} [oldestFavorite] The favorite after which the function should return Favorites
+ */
 const getNextBatch = async (req, oldestFavorite) => {
   const { user: sessionUser } = req.session;
   const { twitterClient } = req;
@@ -104,6 +125,63 @@ const getNextBatch = async (req, oldestFavorite) => {
   return await Favorite.find(query)
     .sort("-created_at")
     .limit(PAGE_SIZE);
+};
+
+const findTweetsOlderThan = async req => {
+  const { twitterClient } = req;
+  const { user: sessionUser } = req.session;
+
+  const twitterParams = {
+    screen_name: sessionUser.screen_name,
+    count: TWITTER_FETCH_SIZE
+  };
+
+  const f = await Favorite.findOne({ id_str: req.query.before_id });
+  const { created_at } = f;
+  const favorites = [];
+  // Does tweet fall in a range?
+  const r = await Range.findOne({
+    start_time: {
+      $gte: created_at
+    },
+    end_time: {
+      $lte: created_at
+    }
+  });
+  if (r) {
+    // Find tweets created before the requested Tweet, but within the DB range
+    const favesFromRange = await Favorite.find({
+      created_at: {
+        $lt: created_at,
+        $gte: r.end_time
+      }
+    })
+      .sort("-created_at")
+      .limit(20);
+
+    if (favesFromRange) favorites.push(...favesFromRange);
+
+    if (favorites.length < PAGE_SIZE && favorites.length > 0) {
+      // what was the range before this one?
+      const prevRange = await Range.findOne({
+        start_time: {
+          $lt: favorites[favorites.length - 1].created_at
+        }
+      });
+
+      // Find Tweets from Twitter that are newer than the prevRange, but older than
+      // the last Tweet we have
+      twitterParams.max_id = [favorites.length - 1].id_str;
+      if (prevRange) twitterParams.since_id = prevRange.start_id;
+      const favoritesFromTwitter = await listFavorites(
+        twitterClient,
+        twitterParams
+      );
+
+      favorites.push(...favoritesFromTwitter);
+    }
+    return favorites.slice(0, PAGE_SIZE);
+  }
 };
 
 const saveFavorites = (user, favorites) => {

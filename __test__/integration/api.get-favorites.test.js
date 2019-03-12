@@ -385,3 +385,106 @@ describe("with no before_id query parameter", () => {
     });
   });
 });
+
+describe("with a before_id query parameter", () => {
+  describe("when the before_id falls in a range that is saved in the DB", () => {
+    describe("when the range contains enough Tweets to fulfil the request", () => {
+      let dbFavorites, range;
+      beforeEach(async () => {
+        dbFavorites = await saveFavorites(testUser, createMockFavorites(25));
+        range = await new Range({
+          user_id: testUser._id,
+          start_time: dbFavorites[0].created_at,
+          start_id: dbFavorites[0].id_str,
+          end_time: dbFavorites[dbFavorites.length - 1].created_at,
+          end_id: dbFavorites[dbFavorites.length - 1].id_str
+        }).save();
+      });
+
+      test("returns the tweets from the DB", async () => {
+        const beforeId = dbFavorites[0].id_str;
+        const { body } = await authAgent
+          .get(`/api/favorites?before_id=${beforeId}`)
+          .expect(200);
+        expect(body.favorites).toHaveLength(20);
+        body.favorites.forEach((f, i) => {
+          expect(f.id_str).toBe(dbFavorites[i + 1].id_str);
+        });
+      });
+
+      test("does not modify the ranges in the DB", async () => {
+        const beforeId = dbFavorites[0].id_str;
+        await authAgent.get(`/api/favorites?before_id=${beforeId}`);
+        const ranges = await Range.find({ user_id: testUser._id });
+        expect(ranges).toHaveLength(1);
+        expect(ranges[0]._id).toEqual(range._id);
+      });
+
+      test("makes no calls to Twitter API", async () => {
+        const beforeId = dbFavorites[0].id_str;
+        await authAgent.get(`/api/favorites?before_id=${beforeId}`);
+        expect(listFavorites.mock.calls.length).toBe(0);
+      });
+    });
+
+    describe("when the range does not contain enough Tweets to fulfil request", () => {
+      describe("when there is only the 1 range save in the DB", () => {
+        describe("when enough new Tweets can be fetched from Twitter", () => {
+          let dbFavorites, twitterFavorites, range;
+          beforeEach(async () => {
+            const faves = createMockFavorites(25);
+            dbFavorites = await saveFavorites(testUser, faves.slice(0, 5));
+            twitterFavorites = faves.slice(5);
+            listFavorites.mockResolvedValueOnce(twitterFavorites);
+
+            range = await new Range({
+              user_id: testUser._id,
+              start_time: dbFavorites[0].created_at,
+              start_id: dbFavorites[0].id_str,
+              end_time: dbFavorites[dbFavorites.length - 1].created_at,
+              end_id: dbFavorites[dbFavorites.length - 1].id_str
+            }).save();
+          });
+
+          test("responds with Tweets from the range saved in the DB and extras from Twitter", async () => {
+            const beforeId = dbFavorites[0].id_str;
+
+            const { body } = await authAgent
+              .get(`/api/favorites?before_id=${beforeId}`)
+              .expect(200);
+            expect(body.favorites).toHaveLength(20);
+          });
+
+          test("saves the new Range in the DB", () => {});
+
+          test("saves the new Tweets in the DB", () => {});
+        });
+
+        describe("when no Tweets can be fetched from Twitter", () => {});
+
+        describe("when neither the DB nor Twitter contain tweets older than before_id", () => {});
+
+        describe("when not enough extra Tweets can be fetched from Twitter", () => {
+          test("responds with however many tweets are available from DB + Twitter", () => {});
+
+          test("saves the new Range in the DB", () => {});
+
+          test("saves the new Tweets in the DB", () => {});
+        });
+      });
+
+      // describe('when there are no more tweets from Twitter')
+      describe("when there are no more tweets from Twitter and no more ranges in the DB", () => {});
+
+      describe("when there are no more tweets from Twitter but  in the DB", () => {});
+    });
+  });
+
+  describe("when the before_id falls outside of a range", () => {
+    describe("when > 20 Tweets are fetched from Twitter", () => {});
+
+    describe("when < 20 tweets returned from Twitter and no more Tweets are in the DB", () => {});
+
+    describe("when < 20 tweets returned from Twitter and more Tweets are in the DB", () => {});
+  });
+});
