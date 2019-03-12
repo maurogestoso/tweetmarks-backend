@@ -428,13 +428,16 @@ describe("with a before_id query parameter", () => {
     });
 
     describe("when the range does not contain enough Tweets to fulfil request", () => {
-      describe("when there is only the 1 range save in the DB", () => {
+      describe("when there is only the 1 range saved in the DB", () => {
         describe("when enough new Tweets can be fetched from Twitter", () => {
-          let dbFavorites, twitterFavorites, range;
+          let dbFavorites, twitterFavorites, range, mockFavorites;
           beforeEach(async () => {
-            const faves = createMockFavorites(25);
-            dbFavorites = await saveFavorites(testUser, faves.slice(0, 5));
-            twitterFavorites = faves.slice(5);
+            mockFavorites = createMockFavorites(25);
+            dbFavorites = await saveFavorites(
+              testUser,
+              mockFavorites.slice(0, 5)
+            );
+            twitterFavorites = mockFavorites.slice(5);
             listFavorites.mockResolvedValueOnce(twitterFavorites);
 
             range = await new Range({
@@ -455,14 +458,83 @@ describe("with a before_id query parameter", () => {
             expect(body.favorites).toHaveLength(20);
           });
 
-          test("saves the new Range in the DB", () => {});
+          test("saves the new Range in the DB", async () => {
+            const beforeId = dbFavorites[0].id_str;
+            await authAgent.get(`/api/favorites?before_id=${beforeId}`);
+            const ranges = await Range.find({ user_id: testUser._id }).sort(
+              "-start_time"
+            );
+            expect(ranges).toHaveLength(2);
+            expect(ranges[0].start_id).toBe(range.start_id);
+            expect(ranges[1].start_id).toBe(twitterFavorites[0].id_str);
+          });
 
-          test("saves the new Tweets in the DB", () => {});
+          test("saves the new Tweets in the DB", async () => {
+            const beforeId = dbFavorites[0].id_str;
+            await authAgent.get(`/api/favorites?before_id=${beforeId}`);
+            const dbFaves = await Favorite.find({ user_id: testUser._id }).sort(
+              "-created_at"
+            );
+            expect(dbFaves).toHaveLength(25);
+            dbFaves.forEach((fav, i) => {
+              expect(fav).toHaveProperty("id_str");
+              expect(fav.id_str).toBe(mockFavorites[i].id_str);
+            });
+          });
         });
 
-        describe("when no Tweets can be fetched from Twitter", () => {});
+        describe("when no Tweets can be fetched from Twitter", () => {
+          let dbFavorites;
+          beforeEach(async () => {
+            dbFavorites = await saveFavorites(testUser, createMockFavorites(5));
+            listFavorites.mockResolvedValueOnce([]);
+            await new Range({
+              user_id: testUser._id,
+              start_time: dbFavorites[0].created_at,
+              start_id: dbFavorites[0].id_str,
+              end_time: dbFavorites[dbFavorites.length - 1].created_at,
+              end_id: dbFavorites[dbFavorites.length - 1].id_str
+            }).save();
+          });
 
-        describe("when neither the DB nor Twitter contain tweets older than before_id", () => {});
+          test("responds with as many Tweets as exist in the DB", async () => {
+            const beforeId = dbFavorites[0].id_str;
+
+            const { body } = await authAgent
+              .get(`/api/favorites?before_id=${beforeId}`)
+              .expect(200);
+            expect(body.favorites).toHaveLength(4);
+            body.favorites.forEach((fav, i) => {
+              expect(fav).toHaveProperty("id_str");
+              expect(fav.id_str).toBe(dbFavorites[i + 1].id_str);
+            });
+          });
+        });
+
+        describe("when neither the DB nor Twitter contain tweets older than before_id", () => {
+          let dbFavorites;
+          beforeEach(async () => {
+            dbFavorites = await saveFavorites(testUser, createMockFavorites(1));
+            listFavorites.mockResolvedValueOnce([]);
+            await new Range({
+              user_id: testUser._id,
+              start_time: dbFavorites[0].created_at,
+              start_id: dbFavorites[0].id_str,
+              end_time: dbFavorites[0].created_at,
+              end_id: dbFavorites[0].id_str
+            }).save();
+          });
+
+          test("responds with an empty array", async () => {
+            const beforeId = dbFavorites[0].id_str;
+            const { body } = await authAgent
+              .get(`/api/favorites?before_id=${beforeId}`)
+              .expect(200);
+            expect(body.favorites).toHaveLength(0);
+          });
+
+          test("calls Twitter with the correct parameters", () => {});
+        });
 
         describe("when not enough extra Tweets can be fetched from Twitter", () => {
           test("responds with however many tweets are available from DB + Twitter", () => {});

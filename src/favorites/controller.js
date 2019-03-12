@@ -12,6 +12,7 @@ export const getFavorites = async (req, res) => {
       return res.status(200).send({ favorites });
     } catch (e) {
       console.log(e);
+      return res.status(500).send({ error: e });
     }
   } else {
     const favorites = [];
@@ -178,9 +179,26 @@ const findTweetsOlderThan = async req => {
         twitterParams
       );
 
+      if (favoritesFromTwitter.length) {
+        // Save the new range
+        await new Range({
+          start_time: favoritesFromTwitter[0].created_at,
+          start_id: favoritesFromTwitter[0].id_str,
+          end_time:
+            favoritesFromTwitter[favoritesFromTwitter.length - 1].created_at,
+          end_id: favoritesFromTwitter[favoritesFromTwitter.length - 1].id_str,
+          user_id: sessionUser.id
+        }).save();
+
+        // Save the newly fetched Favorites
+        await saveFavorites(sessionUser, favoritesFromTwitter);
+      }
+
       favorites.push(...favoritesFromTwitter);
     }
     return favorites.slice(0, PAGE_SIZE);
+  } else {
+    // Tweet was not in a range; this is illogical
   }
 };
 
