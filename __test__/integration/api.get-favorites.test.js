@@ -399,10 +399,10 @@ describe("with no before_id query parameter", () => {
 describe("with a before_id query parameter", () => {
   describe("when the before_id falls in a range that is saved in the DB", () => {
     describe("when the range contains enough Tweets to fulfil the request", () => {
-      let dbFavorites, range;
+      let dbFavorites, initialRange;
       beforeEach(async () => {
         dbFavorites = await saveFavorites(testUser, createMockFavorites(25));
-        range = await new Range({
+        initialRange = await new Range({
           user_id: testUser._id,
           start_time: dbFavorites[0].created_at,
           start_id: dbFavorites[0].id_str,
@@ -413,21 +413,26 @@ describe("with a before_id query parameter", () => {
 
       test("returns the tweets from the DB", async () => {
         const beforeId = dbFavorites[0].id_str;
-        const { body } = await authAgent
+        const expectedFavorites = dbFavorites.slice(1);
+        const {
+          body: { favorites }
+        } = await authAgent
           .get(`/api/favorites?before_id=${beforeId}`)
           .expect(200);
-        expect(body.favorites).toHaveLength(20);
-        body.favorites.forEach((f, i) => {
-          expect(f.id_str).toBe(dbFavorites[i + 1].id_str);
+
+        expect(favorites).toHaveLength(20);
+        favorites.forEach((f, i) => {
+          expect(f.id_str).toBe(expectedFavorites[i].id_str);
         });
       });
 
       test("does not modify the ranges in the DB", async () => {
         const beforeId = dbFavorites[0].id_str;
-        await authAgent.get(`/api/favorites?before_id=${beforeId}`);
         const ranges = await Range.find({ user_id: testUser._id });
+        await authAgent.get(`/api/favorites?before_id=${beforeId}`);
+
         expect(ranges).toHaveLength(1);
-        expect(ranges[0]._id).toEqual(range._id);
+        expect(ranges[0]._id).toEqual(initialRange._id);
       });
 
       test("makes no calls to Twitter API", async () => {
