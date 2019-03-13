@@ -67,7 +67,7 @@ const getNextBatch = async (req, oldestFavorite) => {
     count: TWITTER_FETCH_SIZE
   };
 
-  if (oldestFavorite) twitterParams.max_id = oldestFavorite.max_id;
+  if (oldestFavorite) twitterParams.max_id = oldestFavorite.id_str;
   // if we have a range, get the newest and use as the since_id
   const topRange = oldestFavorite
     ? (await Range.find({

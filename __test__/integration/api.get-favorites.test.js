@@ -350,17 +350,21 @@ describe("with no before_id query parameter", () => {
 
       test("requests the Twitter API twice with the correct params", async () => {
         await authAgent.get("/api/favorites").expect(200);
+
         let [, params] = listFavorites.mock.calls[0];
+        expect(params).toHaveProperty("since_id");
         expect(params).toEqual({
           screen_name: testUser.screen_name,
           count: 20,
           since_id: topRange.start_id
         });
+
         [, params] = listFavorites.mock.calls[1];
+        expect(params).toHaveProperty("max_id");
         expect(params).toEqual({
           screen_name: testUser.screen_name,
           count: 20,
-          max_id: dbFavorites[dbFavorites.length - 1].max_id
+          max_id: dbFavorites[dbFavorites.length - 1].id_str
         });
       });
 
