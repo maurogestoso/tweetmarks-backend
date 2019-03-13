@@ -132,28 +132,26 @@ const findTweetsOlderThan = async req => {
   const { twitterClient } = req;
   const { user: sessionUser } = req.session;
 
-  const twitterParams = {
-    screen_name: sessionUser.screen_name,
-    count: TWITTER_FETCH_SIZE
-  };
+  const beforeFavorite = await Favorite.findOne({
+    user_id: sessionUser.id,
+    id_str: req.query.before_id
+  });
 
-  const f = await Favorite.findOne({ id_str: req.query.before_id });
-  const { created_at } = f;
   const favorites = [];
   // Does tweet fall in a range?
   const r = await Range.findOne({
     start_time: {
-      $gte: created_at
+      $gte: beforeFavorite.created_at
     },
     end_time: {
-      $lte: created_at
+      $lte: beforeFavorite.created_at
     }
   });
   if (r) {
     // Find tweets created before the requested Tweet, but within the DB range
     const favesFromRange = await Favorite.find({
       created_at: {
-        $lt: created_at,
+        $lt: beforeFavorite.created_at,
         $gte: r.end_time
       }
     })
@@ -172,6 +170,10 @@ const findTweetsOlderThan = async req => {
 
       // Find Tweets from Twitter that are newer than the prevRange, but older than
       // the last Tweet we have
+      const twitterParams = {
+        screen_name: sessionUser.screen_name,
+        count: TWITTER_FETCH_SIZE
+      };
       twitterParams.max_id = [favorites.length - 1].id_str;
       if (prevRange) twitterParams.since_id = prevRange.start_id;
       const favoritesFromTwitter = await listFavorites(
@@ -196,6 +198,7 @@ const findTweetsOlderThan = async req => {
 
       favorites.push(...favoritesFromTwitter);
     }
+    // FIXME: favorites contains a mix of favorites from the DB and from Twitter
     return favorites.slice(0, PAGE_SIZE);
   } else {
     // Tweet was not in a range; this is illogical

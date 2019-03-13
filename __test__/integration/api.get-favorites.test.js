@@ -466,11 +466,23 @@ describe("with a before_id query parameter", () => {
 
           test("responds with Tweets from the range saved in the DB and extras from Twitter", async () => {
             const beforeId = dbFavorites[0].id_str;
+            const expectedFavorites = [
+              ...dbFavorites.slice(1),
+              ...twitterFavorites.slice(0, 16)
+            ];
 
-            const { body } = await authAgent
+            const {
+              body: { favorites }
+            } = await authAgent
               .get(`/api/favorites?before_id=${beforeId}`)
               .expect(200);
-            expect(body.favorites).toHaveLength(20);
+
+            expect(favorites).toHaveLength(expectedFavorites.length);
+            favorites.forEach((fav, i) => {
+              expect(fav).toHaveProperty("id_str");
+              expect(fav.processed).toBe(false);
+              expect(fav.id_str).toBe(expectedFavorites[i].id_str);
+            });
           });
 
           test("saves the new Range in the DB", async () => {
