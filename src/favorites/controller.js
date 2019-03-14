@@ -1,6 +1,11 @@
 import Favorite from "./model";
 import Range from "../ranges/model";
 import { listFavorites } from "../twitter";
+import {
+  findOlderFavoritesInRange,
+  findAllFavoritesInRange,
+  fetchFavesFromTwitterBetween
+} from "./helpers";
 
 const PAGE_SIZE = 20;
 const TWITTER_FETCH_SIZE = 20;
@@ -129,80 +134,52 @@ const getNextBatch = async (req, oldestFavorite) => {
 };
 
 const findTweetsOlderThan = async req => {
-  const { twitterClient } = req;
   const { user: sessionUser } = req.session;
+  const { before_id } = req.query;
 
-  const beforeFavorite = await Favorite.findOne({
-    user_id: sessionUser.id,
-    id_str: req.query.before_id
-  });
+  const f = await Favorite.findOne({ id_str: before_id });
 
   const favorites = [];
-  // Does tweet fall in a range?
-  const r = await Range.findOne({
-    start_time: {
-      $gte: beforeFavorite.created_at
-    },
-    end_time: {
-      $lte: beforeFavorite.created_at
-    }
-  });
-  if (r) {
-    // Find tweets created before the requested Tweet, but within the DB range
-    const favesFromRange = await Favorite.find({
-      created_at: {
-        $lt: beforeFavorite.created_at,
-        $gte: r.end_time
-      }
-    })
-      .sort("-created_at")
-      .limit(20);
-
-    if (favesFromRange) favorites.push(...favesFromRange);
-
-    if (favorites.length < PAGE_SIZE && favorites.length > 0) {
-      // what was the range before this one?
-      const prevRange = await Range.findOne({
-        start_time: {
-          $lt: favorites[favorites.length - 1].created_at
-        }
-      });
-
-      // Find Tweets from Twitter that are newer than the prevRange, but older than
-      // the last Tweet we have
-      const twitterParams = {
-        screen_name: sessionUser.screen_name,
-        count: TWITTER_FETCH_SIZE
-      };
-      twitterParams.max_id = [favorites.length - 1].id_str;
-      if (prevRange) twitterParams.since_id = prevRange.start_id;
-      const favoritesFromTwitter = await listFavorites(
-        twitterClient,
-        twitterParams
-      );
-
-      if (favoritesFromTwitter.length) {
-        // Save the new range
-        await new Range({
-          start_time: favoritesFromTwitter[0].created_at,
-          start_id: favoritesFromTwitter[0].id_str,
-          end_time:
-            favoritesFromTwitter[favoritesFromTwitter.length - 1].created_at,
-          end_id: favoritesFromTwitter[favoritesFromTwitter.length - 1].id_str,
-          user_id: sessionUser.id
-        }).save();
-
-        // Save the newly fetched Favorites
-        await saveFavorites(sessionUser, favoritesFromTwitter);
-      }
-
-      favorites.push(...favoritesFromTwitter);
-    }
-    // FIXME: favorites contains a mix of favorites from the DB and from Twitter
-    return favorites.slice(0, PAGE_SIZE);
-  } else {
-    // Tweet was not in a range; this is illogical
+  const olderFavesInRange = await findOlderFavoritesInRange(f);
+  if (olderFavesInRange.length) {
+    favorites.push(...olderFavesInRange);
   }
+
+  while (favorites.length < PAGE_SIZE) {
+    console.log(favorites.length);
+    const oldestCurrentFave =
+      favorites.length === 0 ? f : favorites[favorites.length - 1];
+
+    // what was the range before this one?
+    const prevRange = await Range.findOne({
+      start_time: {
+        $lt: oldestCurrentFave.created_at
+      }
+    });
+
+    const fromTwitter = await fetchFavesFromTwitterBetween(
+      req,
+      oldestCurrentFave.id_str,
+      prevRange ? prevRange.start_id : null
+    );
+    console.log("from twitter length", fromTwitter.length);
+    favorites.push(...fromTwitter);
+    // If there was no prev range, just return what we have now
+    if (!prevRange) {
+      console.log("no prev range found");
+      break;
+      // Fetch favorites from within the previous range
+    } else {
+      const favesFromRange = await findAllFavoritesInRange(
+        sessionUser,
+        prevRange
+      );
+      console.log("faves from range", favesFromRange.length);
+      favorites.push(...favesFromRange);
+    }
+  }
+
+  return favorites.slice(0, PAGE_SIZE);
 };
 
 const saveFavorites = (user, favorites) => {
