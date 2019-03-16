@@ -18,5 +18,5 @@ export const listFavorites = async (client, params = {}) => {
     }
   }
 
-  return meFaves.slice(0, 20);
+  return meFaves;
 };
