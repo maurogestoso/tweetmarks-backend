@@ -137,7 +137,10 @@ const findTweetsOlderThan = async req => {
   const { user: sessionUser } = req.session;
   const { before_id } = req.query;
 
-  const f = await Favorite.findOne({ id_str: before_id });
+  const f = await Favorite.findOne({
+    user_id: sessionUser.id,
+    id_str: before_id
+  });
 
   const favorites = [];
   const olderFavesInRange = await findOlderFavoritesInRange(f);
@@ -151,6 +154,7 @@ const findTweetsOlderThan = async req => {
 
     // what was the range before this one?
     const prevRange = await Range.findOne({
+      user_id: sessionUser.id,
       start_time: {
         $lt: oldestCurrentFave.created_at
       }
