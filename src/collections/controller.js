@@ -2,6 +2,28 @@ import status from "http-status";
 import Collection from "./model";
 import Favorite from "../favorites/model";
 
+export const getCollection = (req, res, next) => {
+  const { user } = req.session;
+  const { collectionId } = req.params;
+  Collection.findOne({
+    _id: collectionId,
+    user_id: user.id
+  })
+    .then(collection => {
+      if (!collection) return res.status(status.NOT_FOUND).end();
+      return res.status(200).send({ collection });
+    })
+    .catch(err => {
+      if (err.name === "CastError") {
+        return res
+          .status(400)
+          .send({ error: { message: "Invalid collection id" } });
+      }
+      console.log({ err });
+      next(err);
+    });
+};
+
 export const getCollections = (req, res, next) => {
   const { user } = req.session;
   Collection.find({ user_id: user.id }, { name: true })
