@@ -583,33 +583,26 @@ describe("with a before_id query parameter", () => {
     });
 
     describe("when there are two ranges in the DB", () => {
-      let dbFavorites1,
-        dbFavorites2,
-        range1,
-        range2,
-        twitterFavorites,
-        mockFavorites;
-      beforeEach(async () => {
-        mockFavorites = createMockFavorites(30);
-        let res = await saveFavoritesAndRange(
-          testUser,
-          mockFavorites.slice(0, 5)
-        );
-        dbFavorites1 = res.favorites;
-        range1 = res.range;
-
-        twitterFavorites = mockFavorites.slice(5, 15);
-
-        res = await saveFavoritesAndRange(testUser, mockFavorites.slice(15));
-        dbFavorites2 = res.favorites;
-        range2 = res.range;
-
-        listFavorites
-          .mockResolvedValueOnce(twitterFavorites)
-          .mockResolvedValueOnce([]);
-      });
-
       describe("when enough tweets can be fetched from two ranges + Twitter", () => {
+        let dbFavorites1, range2, twitterFavorites, mockFavorites;
+        beforeEach(async () => {
+          mockFavorites = createMockFavorites(30);
+          let res = await saveFavoritesAndRange(
+            testUser,
+            mockFavorites.slice(0, 5)
+          );
+          dbFavorites1 = res.favorites;
+
+          twitterFavorites = mockFavorites.slice(5, 15);
+
+          res = await saveFavoritesAndRange(testUser, mockFavorites.slice(15));
+          range2 = res.range;
+
+          listFavorites
+            .mockResolvedValueOnce(twitterFavorites)
+            .mockResolvedValueOnce([]);
+        });
+
         test("responds with the correct 20 Tweets", async () => {
           const beforeId = dbFavorites1[0].id_str;
           const { body } = await authAgent
@@ -622,9 +615,102 @@ describe("with a before_id query parameter", () => {
           });
         });
 
-        test("calls the Twitter API with the correct parameters", () => {});
-        test("saves a new range in the DB", () => {});
-        test("saves the Tweets from Twitter in the DB", () => {});
+        test("calls the Twitter API with the correct parameters", async () => {
+          const beforeId = dbFavorites1[0].id_str;
+          await authAgent.get(`/api/favorites?before_id=${beforeId}`);
+          const [, params] = listFavorites.mock.calls[0];
+          expect(params).toEqual({
+            screen_name: testUser.screen_name,
+            count: 20,
+            since_id: range2.start_id,
+            max_id: dbFavorites1[dbFavorites1.length - 1].id_str
+          });
+        });
+
+        test("saves a new range in the DB", async () => {
+          const beforeId = dbFavorites1[0].id_str;
+          await authAgent.get(`/api/favorites?before_id=${beforeId}`);
+          const ranges = await Range.find().sort("-start_time");
+          expect(ranges).toHaveLength(3);
+
+          // We have saved a new range in between the two previous ranges
+          expect(ranges[1].start_time).toEqual(twitterFavorites[0].created_at);
+          expect(ranges[1].end_time).toEqual(
+            twitterFavorites[twitterFavorites.length - 1].created_at
+          );
+        });
+
+        test("saves the Tweets from Twitter in the DB", async () => {
+          const beforeId = dbFavorites1[0].id_str;
+          await authAgent.get(`/api/favorites?before_id=${beforeId}`);
+          const faves = await Favorite.find().sort("-start_time");
+          expect(faves).toHaveLength(30);
+        });
+      });
+
+      describe("when < 20 tweets can be fetched from two ranges + Twitter", () => {
+        let dbFavorites1, range2, twitterFavorites, mockFavorites;
+        beforeEach(async () => {
+          mockFavorites = createMockFavorites(13);
+          let res = await saveFavoritesAndRange(
+            testUser,
+            mockFavorites.slice(0, 5)
+          );
+          dbFavorites1 = res.favorites;
+
+          twitterFavorites = mockFavorites.slice(5, 8);
+
+          res = await saveFavoritesAndRange(testUser, mockFavorites.slice(8));
+          range2 = res.range;
+
+          listFavorites
+            .mockResolvedValueOnce(twitterFavorites)
+            .mockResolvedValueOnce([]);
+        });
+
+        test("responds with as many Tweets as it can find", async () => {
+          const beforeId = dbFavorites1[0].id_str;
+          const { body } = await authAgent
+            .get(`/api/favorites?before_id=${beforeId}`)
+            .expect(200);
+          expect(body.favorites).toHaveLength(12);
+          body.favorites.forEach((fav, i) => {
+            expect(fav).toHaveProperty("id_str");
+            expect(fav.id_str).toBe(mockFavorites[i + 1].id_str);
+          });
+        });
+
+        test("calls the Twitter API with the correct parameters", async () => {
+          const beforeId = dbFavorites1[0].id_str;
+          await authAgent.get(`/api/favorites?before_id=${beforeId}`);
+          const [, params] = listFavorites.mock.calls[0];
+          expect(params).toEqual({
+            screen_name: testUser.screen_name,
+            count: 20,
+            since_id: range2.start_id,
+            max_id: dbFavorites1[dbFavorites1.length - 1].id_str
+          });
+        });
+
+        test("saves a new range in the DB", async () => {
+          const beforeId = dbFavorites1[0].id_str;
+          await authAgent.get(`/api/favorites?before_id=${beforeId}`);
+          const ranges = await Range.find().sort("-start_time");
+          expect(ranges).toHaveLength(3);
+
+          // We have saved a new range in between the two previous ranges
+          expect(ranges[1].start_time).toEqual(twitterFavorites[0].created_at);
+          expect(ranges[1].end_time).toEqual(
+            twitterFavorites[twitterFavorites.length - 1].created_at
+          );
+        });
+
+        test("saves the Tweets from Twitter in the DB", async () => {
+          const beforeId = dbFavorites1[0].id_str;
+          await authAgent.get(`/api/favorites?before_id=${beforeId}`);
+          const faves = await Favorite.find().sort("-start_time");
+          expect(faves).toHaveLength(13);
+        });
       });
     });
 

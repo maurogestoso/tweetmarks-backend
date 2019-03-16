@@ -75,9 +75,8 @@ export const fetchFavesFromTwitterBetween = async (
 export const findAllFavoritesInRange = async (sessionUser, range) => {
   return await Favorite.find({
     created_at: {
-      $gte: range.start_time,
-      $lte: range.end_time
-    },
-    user_id: sessionUser.id
-  });
+      $lte: range.start_time,
+      $gte: range.end_time
+    }
+  }).sort("-created_at");
 };

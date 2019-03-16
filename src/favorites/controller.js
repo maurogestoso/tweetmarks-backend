@@ -146,7 +146,6 @@ const findTweetsOlderThan = async req => {
   }
 
   while (favorites.length < PAGE_SIZE) {
-    console.log(favorites.length);
     const oldestCurrentFave =
       favorites.length === 0 ? f : favorites[favorites.length - 1];
 
@@ -162,11 +161,9 @@ const findTweetsOlderThan = async req => {
       oldestCurrentFave.id_str,
       prevRange ? prevRange.start_id : null
     );
-    console.log("from twitter length", fromTwitter.length);
     favorites.push(...fromTwitter);
     // If there was no prev range, just return what we have now
     if (!prevRange) {
-      console.log("no prev range found");
       break;
       // Fetch favorites from within the previous range
     } else {
@@ -174,7 +171,6 @@ const findTweetsOlderThan = async req => {
         sessionUser,
         prevRange
       );
-      console.log("faves from range", favesFromRange.length);
       favorites.push(...favesFromRange);
     }
   }
