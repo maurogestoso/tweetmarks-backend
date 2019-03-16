@@ -55,7 +55,7 @@ beforeAll(async () => {
 
 let authAgent, testUser;
 beforeEach(async () => {
-  listFavorites.mockReset();
+  jest.resetAllMocks();
   await dropUsers();
   await dropFavorites();
   await dropRanges();
