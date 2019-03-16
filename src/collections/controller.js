@@ -1,5 +1,6 @@
 import status from "http-status";
 import Collection from "./model";
+import Favorite from "../favorites/model";
 
 export const getCollections = (req, res, next) => {
   const { user } = req.session;
@@ -45,6 +46,25 @@ export const deleteCollection = async (req, res, next) => {
       return res.status(status.NOT_FOUND).end();
     }
     return res.status(status.NO_CONTENT).end();
+  } catch (err) {
+    if (err.name === "CastError" && err.kind === "ObjectId") {
+      return res
+        .status(status.BAD_REQUEST)
+        .send({ error: { message: "Invalid collection id" } });
+    }
+    return next(err);
+  }
+};
+
+export const getFavoritesInCollection = async (req, res, next) => {
+  const { collectionId } = req.params;
+  const { user } = req.session;
+  try {
+    const favorites = await Favorite.find({
+      user_id: user.id,
+      collection_id: collectionId
+    });
+    return res.status(status.OK).send({ favorites });
   } catch (err) {
     if (err.name === "CastError" && err.kind === "ObjectId") {
       return res

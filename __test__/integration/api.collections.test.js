@@ -2,6 +2,7 @@ import supertest from "supertest";
 import mongoose from "mongoose";
 import app from "../../src/app";
 import Collection from "../../src/collections/model";
+import Favorite from "../../src/favorites/model";
 import { getAutenticatedAgent } from "../helpers";
 
 let authAgent, testUser;
@@ -103,4 +104,46 @@ describe("DELETE /api/collections/:id", () => {
 
     expect(body.error.message).toBe("Invalid collection id");
   });
+});
+
+test("GET /api/collections/:id/favorites 401s for an unauthorised user", async () => {
+  return supertest(app)
+    .get(`/api/collections/${mongoose.Types.ObjectId()}/favorites`)
+    .expect(401);
+});
+
+test("GET /api/collections/:id/favorites responds with favorites", async () => {
+  const testCollection = await Collection.create(
+    new Collection({ name: "my collection", user_id: testUser._id })
+  );
+
+  const fave = await Favorite.create({
+    user_id: testUser._id,
+    collection_id: testCollection._id,
+    id_str: "123",
+    created_at: Date.now()
+  });
+
+  const { body } = await authAgent
+    .get(`/api/collections/${testCollection._id}/favorites`)
+    .expect(200);
+  expect(body.favorites).toHaveLength(1);
+  expect(body.favorites[0].collection_id.toString()).toBe(
+    testCollection._id.toString()
+  );
+  expect(body.favorites[0].id_str).toEqual(fave.id_str);
+});
+
+test("GET /api/collections/:id/favorites 400s for an invalid collection id", async () => {
+  const { body } = await authAgent
+    .get(`/api/collections/123/favorites`)
+    .expect(400);
+  expect(body.error.message).toBe("Invalid collection id");
+});
+
+test("GET /api/collections/:id/favorites repsonds with an empty array for a non-existing collection", async () => {
+  const { body } = await authAgent
+    .get(`/api/collections/${mongoose.Types.ObjectId()}/favorites`)
+    .expect(200);
+  expect(body.favorites).toHaveLength(0);
 });
