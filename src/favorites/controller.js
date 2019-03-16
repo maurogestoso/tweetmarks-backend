@@ -190,7 +190,8 @@ const saveFavorites = (user, favorites) => {
           user_id: user.id,
           created_at: fav.created_at,
           id_str: fav.id_str,
-          processed: false
+          processed: false,
+          text: fav.text
         })
     )
   );

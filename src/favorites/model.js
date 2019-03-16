@@ -8,6 +8,7 @@ const schema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  text: String,
   collection_id: { type: mongoose.Schema.Types.ObjectId, ref: "Collection" }
 });
 
