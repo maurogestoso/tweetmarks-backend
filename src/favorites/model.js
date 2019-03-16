@@ -7,7 +7,8 @@ const schema = new mongoose.Schema({
   processed: {
     type: Boolean,
     default: false
-  }
+  },
+  collection_id: { type: mongoose.Schema.Types.ObjectId, ref: "Collection" }
 });
 
 export default mongoose.model("favorite", schema);
