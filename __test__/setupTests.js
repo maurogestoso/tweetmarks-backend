@@ -1,4 +1,5 @@
 import "babel-polyfill";
+import mongoose from "mongoose";
 
 process.env.TWITTER_API_KEY = "twitter-api-key";
 process.env.TWITTER_API_SECRET_KEY = "twitter-api-secret-key";
@@ -8,3 +9,7 @@ process.env.TWITTER_CALLBACK = "http://localhost:3000/auth/callback";
 process.env.FRONTEND_BASE_URL = "http://localhost:7700";
 process.env.SESSION_SECRET = "session-secret";
 process.env.DATABASE_URI = "mongodb://localhost:27017/test";
+
+afterAll(() => {
+  return mongoose.disconnect();
+});

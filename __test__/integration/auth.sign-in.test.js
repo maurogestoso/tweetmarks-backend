@@ -49,5 +49,5 @@ test("redirects to /oauth/request_token with the correct params", () => {
 test("responds with a session cookie", () => {
   return supertest(app)
     .get("/auth/sign-in")
-    .expect("set-cookie", /connect\.sid\=.+/);
+    .expect("set-cookie", /connect\.sid=.+/);
 });

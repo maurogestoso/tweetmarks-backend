@@ -19,7 +19,12 @@ const {
 
 const app = express();
 
-mongoose.connect(DATABASE_URI, { useNewUrlParser: true });
+mongoose.connect(
+  NODE_ENV === "development"
+    ? "mongodb://localhost:27017/tweetmarks"
+    : DATABASE_URI,
+  { useNewUrlParser: true }
+);
 const MongoStore = createMongoStore(session);
 
 if (NODE_ENV === "development") app.use(morgan("dev"));

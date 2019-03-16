@@ -17,7 +17,7 @@ const postRequest = promisify(r.post);
 
 const router = express.Router();
 
-router.get("/", (req, res, next) => {
+router.get("/", (req, res) => {
   const { user } = req.session;
 
   if (!user || !user.oauth_token) {
@@ -72,7 +72,7 @@ router.get("/callback", async (req, res, next) => {
       user_id,
       oauth_token,
       oauth_token_secret,
-      id: user._id
+      id: user._id // TODO: change this to _id
     };
 
     return res.redirect(`${FRONTEND_BASE_URL}/home`);
