@@ -89,25 +89,10 @@ const getNextBatch = async (req, oldestFavorite) => {
     twitterParams.since_id = topRange.start_id;
   }
 
-  // Fetch as many as possible (up to 20) from Twitter since_id
-  const favoritesFromTwitter = await listFavorites(
-    twitterClient,
-    twitterParams
-  );
-
-  if (favoritesFromTwitter.length) {
-    // Save a new range
-    await new Range({
-      user_id: sessionUser.id,
-      start_id: favoritesFromTwitter[0].id_str,
-      start_time: favoritesFromTwitter[0].created_at,
-      end_id: favoritesFromTwitter[favoritesFromTwitter.length - 1].id_str,
-      end_time: favoritesFromTwitter[favoritesFromTwitter.length - 1].created_at
-    }).save();
-  }
-
-  // Save Tweets to DB
-  await saveFavorites(sessionUser, favoritesFromTwitter);
+  // Fetch as many as possible from Twitter
+  const favoritesFromTwitter = await listFavorites(twitterClient, twitterParams)
+    .then(favorites => saveRange(sessionUser, favorites))
+    .then(favorites => saveFavorites(sessionUser, favorites));
 
   // Get the last 20 from DB, only more recent than the end of the top range
   const query = {
@@ -183,6 +168,7 @@ const findTweetsOlderThan = async req => {
 };
 
 const saveFavorites = (user, favorites) => {
+  if (!favorites) return;
   return Favorite.create(
     favorites.map(
       fav =>
@@ -195,6 +181,20 @@ const saveFavorites = (user, favorites) => {
         })
     )
   );
+};
+
+const saveRange = async (user, favorites) => {
+  if (!favorites || favorites.length === 0) return;
+
+  await new Range({
+    user_id: user.id,
+    start_id: favorites[0].id_str,
+    start_time: favorites[0].created_at,
+    end_id: favorites[favorites.length - 1].id_str,
+    end_time: favorites[favorites.length - 1].created_at
+  }).save();
+
+  return favorites;
 };
 
 export const updateFavorite = async (req, res) => {
