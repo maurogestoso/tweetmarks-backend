@@ -27,6 +27,27 @@ export const saveFavorites = (user, favorites) => {
   );
 };
 
+/**
+ * Saves to the DB a Range corresponding to the passed array of favorites
+ * Returns the array of favorites
+ * @param {Object} user An object representing the user
+ * @param {[Object]} favorites An array of favorite objects
+ */
+export const saveRange = async (user, favorites, twitterParams) => {
+  if (!favorites || favorites.length === 0) return [];
+
+  await new Range({
+    user_id: user.id,
+    start_id: favorites[0].id_str,
+    start_time: favorites[0].created_at,
+    end_id: favorites[favorites.length - 1].id_str,
+    end_time: favorites[favorites.length - 1].created_at,
+    is_last: !twitterParams.since_id && favorites.length < 20
+  }).save();
+
+  return favorites;
+};
+
 // TODO: test this helper
 export const findOlderFavoritesInRange = async favorite => {
   const { created_at } = favorite;
