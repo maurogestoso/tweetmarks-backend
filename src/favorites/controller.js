@@ -4,14 +4,18 @@ import { listFavorites } from "../twitter";
 import {
   findOlderFavoritesInRange,
   findAllFavoritesInRange,
-  fetchFavesFromTwitterBetween
+  fetchFavesFromTwitterBetween,
+  saveFavorites,
+  saveRange
 } from "./helpers";
 
 const PAGE_SIZE = 20;
 const TWITTER_FETCH_SIZE = 20;
 
 export const getFavorites = async (req, res) => {
-  if (req.query.before_id !== undefined) {
+  const { user: sessionUser } = req.session;
+
+  if (req.query.before_id) {
     try {
       const favorites = await findTweetsOlderThan(req);
       return res.status(200).send({ favorites });
@@ -34,12 +38,14 @@ export const getFavorites = async (req, res) => {
         return res.status(200).send({ favorites: batch });
       }
 
-      const rangeCount = await Range.countDocuments({
-        user_id: req.session.user.id
+      const veryLastRange = await Range.findOne({
+        user_id: sessionUser.id,
+        is_last: true
       });
-      // We only have 1 range; the one we just saved - so we've got all the Tweets we possibly could get from Twitter, no point continuing/
-      if (rangeCount === 1) {
-        return res.status(200).send({ favorites: favorites });
+
+      if (favorites.length < PAGE_SIZE && veryLastRange) {
+        // this means that there are no more favorites to fetch (reached the bottom of the favorites history)
+        return res.status(200).send({ favorites });
       }
     }
 
@@ -65,29 +71,14 @@ export const getFavorites = async (req, res) => {
 const getNextBatch = async (req, oldestFavorite) => {
   const { user: sessionUser } = req.session;
   const { twitterClient } = req;
+  const topRange = await getNewestRangeSince(sessionUser, oldestFavorite);
 
-  // if there is no param
   const twitterParams = {
     screen_name: sessionUser.screen_name,
-    count: TWITTER_FETCH_SIZE
+    count: TWITTER_FETCH_SIZE,
+    max_id: oldestFavorite ? oldestFavorite.id_str : undefined,
+    since_id: topRange ? topRange.start_id : undefined
   };
-
-  if (oldestFavorite) twitterParams.max_id = oldestFavorite.id_str;
-  // if we have a range, get the newest and use as the since_id
-  const topRange = oldestFavorite
-    ? (await Range.find({
-        user_id: sessionUser.id,
-        start_time: { $lt: oldestFavorite.created_at }
-      })
-        .sort("-start_time")
-        .limit(1))[0]
-    : (await Range.find({ user_id: sessionUser.id })
-        .sort("-start_time")
-        .limit(1))[0];
-
-  if (topRange) {
-    twitterParams.since_id = topRange.start_id;
-  }
 
   // Fetch as many as possible from Twitter
   const twitterFavorites = await listFavorites(twitterClient, twitterParams);
@@ -109,7 +100,7 @@ const getNextBatch = async (req, oldestFavorite) => {
   if (oldestFavorite) {
     query.created_at = {
       ...query.created_at,
-      $lte: favoritesFromTwitter[0].created_at
+      $lte: twitterFavorites[0].created_at
     };
   }
 
@@ -167,34 +158,17 @@ const findTweetsOlderThan = async req => {
   return favorites.slice(0, PAGE_SIZE);
 };
 
-const saveFavorites = (user, favorites) => {
-  if (!favorites) return;
-  return Favorite.create(
-    favorites.map(
-      fav =>
-        new Favorite({
-          user_id: user.id,
-          created_at: fav.created_at,
-          id_str: fav.id_str,
-          processed: false,
-          text: fav.text
-        })
-    )
-  );
-};
-
-const saveRange = async (user, favorites) => {
-  if (!favorites || favorites.length === 0) return;
-
-  await new Range({
-    user_id: user.id,
-    start_id: favorites[0].id_str,
-    start_time: favorites[0].created_at,
-    end_id: favorites[favorites.length - 1].id_str,
-    end_time: favorites[favorites.length - 1].created_at
-  }).save();
-
-  return favorites;
+const getNewestRangeSince = async (user, oldestFavorite) => {
+  return oldestFavorite
+    ? (await Range.find({
+        user_id: user.id,
+        start_time: { $lt: oldestFavorite.created_at }
+      })
+        .sort("-start_time")
+        .limit(1))[0]
+    : (await Range.find({ user_id: user.id })
+        .sort("-start_time")
+        .limit(1))[0];
 };
 
 export const updateFavorite = async (req, res) => {
