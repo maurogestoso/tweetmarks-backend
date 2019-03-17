@@ -3,6 +3,7 @@ import supertest from "supertest";
 import nock from "nock";
 import app from "../src/app";
 import User from "../src/users/model";
+import Favorite from "../src/favorites/model";
 const TOKEN = "123";
 const OAUTH_TOKEN = "mock_token";
 
@@ -36,4 +37,12 @@ export const createMockFavorites = num => {
     created_at: new Date(Date.now() - i * 100000),
     text: "This is a mock tweet"
   }));
+};
+
+export const dropFavorites = () => {
+  return Favorite.collection.drop().catch(err => {
+    if (err.codeName !== "NamespaceNotFound" && err.code !== 26) {
+      throw err;
+    }
+  });
 };
