@@ -24,6 +24,38 @@ beforeEach(async () => {
   }
 });
 
+describe("GET /api/collection/:collectionId", () => {
+  test("401s for an unauthorised user", () => {
+    return supertest(app)
+      .get(`/api/collection/${mongoose.Types.ObjectId()}`)
+      .expect(401);
+  });
+
+  test("200s with data for authorized user", async () => {
+    const testCollection = await Collection.create(
+      new Collection({ name: "my collection", user_id: testUser._id })
+    );
+
+    const res = await authAgent
+      .get(`/api/collections/${testCollection._id}`)
+      .expect(200);
+
+    expect(res.body).toHaveProperty("collection");
+    expect(res.body.collection.name).toBe("my collection");
+  });
+
+  test("404s if the collection is not found", async () => {
+    await authAgent
+      .get(`/api/collections/${mongoose.Types.ObjectId()}`)
+      .expect(404);
+  });
+
+  test("400s for an invalid collection id", async () => {
+    const { body } = await authAgent.get(`/api/collections/123`).expect(400);
+    expect(body.error.message).toBe("Invalid collection id");
+  });
+});
+
 describe("GET /api/collections", () => {
   test("401s for an unauthorised user", () => {
     return supertest(app)
@@ -106,44 +138,46 @@ describe("DELETE /api/collections/:id", () => {
   });
 });
 
-test("GET /api/collections/:id/favorites 401s for an unauthorised user", async () => {
-  return supertest(app)
-    .get(`/api/collections/${mongoose.Types.ObjectId()}/favorites`)
-    .expect(401);
-});
-
-test("GET /api/collections/:id/favorites responds with favorites", async () => {
-  const testCollection = await Collection.create(
-    new Collection({ name: "my collection", user_id: testUser._id })
-  );
-
-  const fave = await Favorite.create({
-    user_id: testUser._id,
-    collection_id: testCollection._id,
-    id_str: "123",
-    created_at: Date.now()
+describe("GET /api/collections/:id/favorites", () => {
+  test("GET /api/collections/:id/favorites 401s for an unauthorised user", async () => {
+    return supertest(app)
+      .get(`/api/collections/${mongoose.Types.ObjectId()}/favorites`)
+      .expect(401);
   });
 
-  const { body } = await authAgent
-    .get(`/api/collections/${testCollection._id}/favorites`)
-    .expect(200);
-  expect(body.favorites).toHaveLength(1);
-  expect(body.favorites[0].collection_id.toString()).toBe(
-    testCollection._id.toString()
-  );
-  expect(body.favorites[0].id_str).toEqual(fave.id_str);
-});
+  test("GET /api/collections/:id/favorites responds with favorites", async () => {
+    const testCollection = await Collection.create(
+      new Collection({ name: "my collection", user_id: testUser._id })
+    );
 
-test("GET /api/collections/:id/favorites 400s for an invalid collection id", async () => {
-  const { body } = await authAgent
-    .get(`/api/collections/123/favorites`)
-    .expect(400);
-  expect(body.error.message).toBe("Invalid collection id");
-});
+    const fave = await Favorite.create({
+      user_id: testUser._id,
+      collection_id: testCollection._id,
+      id_str: "123",
+      created_at: Date.now()
+    });
 
-test("GET /api/collections/:id/favorites repsonds with an empty array for a non-existing collection", async () => {
-  const { body } = await authAgent
-    .get(`/api/collections/${mongoose.Types.ObjectId()}/favorites`)
-    .expect(200);
-  expect(body.favorites).toHaveLength(0);
+    const { body } = await authAgent
+      .get(`/api/collections/${testCollection._id}/favorites`)
+      .expect(200);
+    expect(body.favorites).toHaveLength(1);
+    expect(body.favorites[0].collection_id.toString()).toBe(
+      testCollection._id.toString()
+    );
+    expect(body.favorites[0].id_str).toEqual(fave.id_str);
+  });
+
+  test("GET /api/collections/:id/favorites 400s for an invalid collection id", async () => {
+    const { body } = await authAgent
+      .get(`/api/collections/123/favorites`)
+      .expect(400);
+    expect(body.error.message).toBe("Invalid collection id");
+  });
+
+  test("GET /api/collections/:id/favorites repsonds with an empty array for a non-existing collection", async () => {
+    const { body } = await authAgent
+      .get(`/api/collections/${mongoose.Types.ObjectId()}/favorites`)
+      .expect(200);
+    expect(body.favorites).toHaveLength(0);
+  });
 });
