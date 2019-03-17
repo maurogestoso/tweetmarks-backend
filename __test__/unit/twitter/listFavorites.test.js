@@ -60,7 +60,7 @@ describe("when Twitter responds with 20 favorites", () => {
 });
 
 describe("when Twitter responds each time with < 20 favorites", () => {
-  test("responds with 20 favorites if possible", async () => {
+  test("responds with the collected favorites from all the calls", async () => {
     const mockFavorites = createMockFavorites(30);
     const since_id = mockFavorites[mockFavorites.length - 1].created_at;
     const mockClient = {
@@ -79,7 +79,7 @@ describe("when Twitter responds each time with < 20 favorites", () => {
       since_id
     });
 
-    expect(favorites.length).toEqual(20);
+    expect(favorites.length).toEqual(mockFavorites.length);
     favorites.forEach((f, i) => {
       expect(f.id_str).toBe(mockFavorites[i].id_str);
       expect(f.created_at).toBe(mockFavorites[i].created_at);
