@@ -90,9 +90,9 @@ const getNextBatch = async (req, oldestFavorite) => {
   }
 
   // Fetch as many as possible from Twitter
-  const favoritesFromTwitter = await listFavorites(twitterClient, twitterParams)
-    .then(favorites => saveRange(sessionUser, favorites))
-    .then(favorites => saveFavorites(sessionUser, favorites));
+  const twitterFavorites = await listFavorites(twitterClient, twitterParams);
+  await saveRange(sessionUser, twitterFavorites, twitterParams);
+  await saveFavorites(sessionUser, twitterFavorites);
 
   // Get the last 20 from DB, only more recent than the end of the top range
   const query = {

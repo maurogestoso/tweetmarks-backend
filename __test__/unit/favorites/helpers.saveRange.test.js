@@ -26,10 +26,10 @@ describe("when passed Twitter params with a since_id", () => {
     };
   });
 
-  test("returns an empty array if passed no favorites", async () => {
+  test("returns null if passed no favorites", async () => {
     const favorites = await saveRange(mockUser, [], mockTwitterParams);
 
-    expect(favorites).toEqual([]);
+    expect(favorites).toEqual(null);
   });
 
   test("does not save a range if passed no favorites", async () => {
@@ -40,14 +40,16 @@ describe("when passed Twitter params with a since_id", () => {
     expect(savedRange).toBe(null);
   });
 
-  test("returns the passed favorites", async () => {
-    const favorites = await saveRange(
+  test("returns the saved range", async () => {
+    const returnedRange = await saveRange(
       mockUser,
       mockFavorites,
       mockTwitterParams
     );
 
-    expect(favorites).toEqual(mockFavorites);
+    const savedRange = await Range.findOne();
+
+    expect(returnedRange.toObject()).toEqual(savedRange.toObject());
   });
 
   test("saves the correct range in the DB", async () => {
@@ -66,9 +68,11 @@ describe("when passed Twitter params with a since_id", () => {
   });
 
   test("sets the is_last field of the saved range to false", async () => {
-    await saveRange(mockUser, mockFavorites, mockTwitterParams);
-
-    const savedRange = await Range.findOne();
+    const savedRange = await saveRange(
+      mockUser,
+      mockFavorites,
+      mockTwitterParams
+    );
 
     expect(savedRange.is_last).toEqual(false);
   });
@@ -85,17 +89,21 @@ describe("when passed Twitter params without a since_id", () => {
   });
 
   test("sets the is_last field of a range to true if passed less than 20 favorites", async () => {
-    await saveRange(mockUser, mockFavorites.slice(0, 10), mockTwitterParams);
-
-    const savedRange = await Range.findOne();
+    const savedRange = await saveRange(
+      mockUser,
+      mockFavorites.slice(0, 10),
+      mockTwitterParams
+    );
 
     expect(savedRange.is_last).toEqual(true);
   });
 
   test("sets the is_last field of a range to false if passed  20 favorites", async () => {
-    await saveRange(mockUser, mockFavorites, mockTwitterParams);
-
-    const savedRange = await Range.findOne();
+    const savedRange = await saveRange(
+      mockUser,
+      mockFavorites,
+      mockTwitterParams
+    );
 
     expect(savedRange.is_last).toEqual(false);
   });
