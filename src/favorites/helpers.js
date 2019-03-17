@@ -5,6 +5,28 @@ import { listFavorites } from "../twitter";
 
 const TWITTER_FETCH_SIZE = 20;
 
+/**
+ * Saves to the DB the array of favorites
+ * Returns the saved array of favorites
+ * @param {Object} user An object representing the user
+ * @param {[Object]} favorites An array of favorite objects
+ */
+export const saveFavorites = (user, favorites) => {
+  if (!favorites || !favorites.length) return [];
+  return Favorite.create(
+    favorites.map(
+      fav =>
+        new Favorite({
+          user_id: user.id,
+          created_at: fav.created_at,
+          id_str: fav.id_str,
+          processed: false,
+          text: fav.text
+        })
+    )
+  );
+};
+
 // TODO: test this helper
 export const findOlderFavoritesInRange = async favorite => {
   const { created_at } = favorite;
