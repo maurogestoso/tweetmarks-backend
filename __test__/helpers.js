@@ -4,6 +4,7 @@ import nock from "nock";
 import app from "../src/app";
 import User from "../src/users/model";
 import Favorite from "../src/favorites/model";
+import Range from "../src/ranges/model";
 const TOKEN = "123";
 const OAUTH_TOKEN = "mock_token";
 
@@ -41,6 +42,22 @@ export const createMockFavorites = num => {
 
 export const dropFavorites = () => {
   return Favorite.collection.drop().catch(err => {
+    if (err.codeName !== "NamespaceNotFound" && err.code !== 26) {
+      throw err;
+    }
+  });
+};
+
+export const dropRanges = () => {
+  return Range.collection.drop().catch(err => {
+    if (err.codeName !== "NamespaceNotFound" && err.code !== 26) {
+      throw err;
+    }
+  });
+};
+
+export const dropUsers = () => {
+  return User.collection.drop().catch(err => {
     if (err.codeName !== "NamespaceNotFound" && err.code !== 26) {
       throw err;
     }

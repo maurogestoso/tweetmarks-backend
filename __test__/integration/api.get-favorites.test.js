@@ -2,10 +2,15 @@ import supertest from "supertest";
 import mongoose from "mongoose";
 
 import app from "../../src/app";
-import { getAutenticatedAgent, createMockFavorites } from "../helpers";
+import {
+  getAutenticatedAgent,
+  createMockFavorites,
+  dropFavorites,
+  dropRanges,
+  dropUsers
+} from "../helpers";
 import { saveFavoritesAndRange } from "../../src/helpers";
 import { listFavorites } from "../../src/twitter";
-import User from "../../src/users/model";
 import Favorite from "../../src/favorites/model";
 import Range from "../../src/ranges/model";
 
@@ -23,30 +28,6 @@ const saveFavorites = (user, favorites) => {
         })
     )
   );
-};
-
-const dropFavorites = () => {
-  return Favorite.collection.drop().catch(err => {
-    if (err.codeName !== "NamespaceNotFound" && err.code !== 26) {
-      throw err;
-    }
-  });
-};
-
-const dropRanges = () => {
-  return Range.collection.drop().catch(err => {
-    if (err.codeName !== "NamespaceNotFound" && err.code !== 26) {
-      throw err;
-    }
-  });
-};
-
-const dropUsers = () => {
-  return User.collection.drop().catch(err => {
-    if (err.codeName !== "NamespaceNotFound" && err.code !== 26) {
-      throw err;
-    }
-  });
 };
 
 beforeAll(async () => {
