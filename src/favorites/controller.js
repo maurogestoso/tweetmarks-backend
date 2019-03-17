@@ -10,72 +10,84 @@ import {
 } from "./helpers";
 
 const PAGE_SIZE = 20;
-const TWITTER_FETCH_SIZE = 20;
 
-export const getFavorites = async (req, res) => {
-  const { user: sessionUser } = req.session;
+export const getFavorites = async (req, res, next) => {
+  try {
+    const favorites = req.query.before_id
+      ? await findOlderFavorites(req)
+      : await findLatestFavorites(req);
 
-  if (req.query.before_id) {
-    try {
-      const favorites = await findTweetsOlderThan(req);
-      return res.status(200).send({ favorites });
-    } catch (e) {
-      console.log(e);
-      return res.status(500).send({ error: e });
-    }
-  } else {
-    const favorites = [];
-
-    while (favorites.length < PAGE_SIZE) {
-      const oldestFavorite = favorites.length
-        ? favorites[favorites.length - 1]
-        : null;
-      const batch = await getNextBatch(req, oldestFavorite);
-      favorites.push(...batch);
-
-      // No favorites found on Twitter
-      if (favorites.length === 0) {
-        return res.status(200).send({ favorites: batch });
-      }
-
-      const veryLastRange = await Range.findOne({
-        user_id: sessionUser.id,
-        is_last: true
-      });
-
-      if (favorites.length < PAGE_SIZE && veryLastRange) {
-        // this means that there are no more favorites to fetch (reached the bottom of the favorites history)
-        return res.status(200).send({ favorites });
-      }
-    }
-
-    // respond
-    return res.status(200).send({ favorites: favorites.slice(0, 20) });
+    res.send({ favorites });
+  } catch (err) {
+    next(err);
   }
 };
 
+const findLatestFavorites = async ({
+  twitterClient,
+  session: { user: sessionUser },
+  query: { pageSize = 20 }
+}) => {
+  const favorites = [];
+
+  while (favorites.length < pageSize) {
+    const batch = await getNextBatch({
+      sessionUser,
+      twitterClient,
+      oldestFavorite: favorites[favorites.length - 1],
+      pageSize
+    });
+
+    favorites.push(...batch);
+
+    if (favorites.length === 0) return favorites;
+
+    const veryLastRange = await Range.findOne({
+      user_id: sessionUser.id,
+      is_last: true
+    });
+
+    if (favorites.length < pageSize && veryLastRange) {
+      // this means that there are no more favorites to fetch (reached the bottom of the favorites history)
+      return favorites;
+    }
+  }
+
+  // respond
+  return favorites.slice(0, 20);
+};
+
 /**
- * Returns up to PAGE_SIZE Tweets, from Twitter or the DB.
+ * Returns the newest available favorites in Twitter plus the favorites corresponding to the most recent range in the DB:
  *
- * When not passed an oldestFavorite it will assume that it should fetch the newest
- * tweets it can from Twitter which are newer than the newest range in the DB,
- * supplemented by further Tweets from the DB to make up the PAGE_SIZE if required, and available.
+ * If passed no oldestFavorite:
+ * 1- Get the newest range from the DB
+ * 2- Fetch favorites from Twitter since the newest favorite in the DB
+ * 3- Save the range of favorites from Twitter in the DB
+ * 4- Return the newest 20 favorites from the DB
  *
- * When passed an oldestFavorite, it will query Twitter for any Tweets newer than the
- * given Favorite. Again, the returned tweets will be supplemented by further older Tweets
- * from the DB to make up the PAGE_SIZE if required, and available.
+ * If passed an oldestFavorite:
+ * 1- Get the newest range from the DB older than oldestFavorite
+ * 2- Fetch favorites from Twitter older than oldestFavorite but newer than the newest favorite in the range
+ * 3- Save the range of favorites from Twitter in the DB
+ * 4- Return the newest 20 favorites from the DB
  *
- * @param {Object} req The request object
- * @param {Favorite} [oldestFavorite] The favorite after which the function should return Favorites
+ * @param {Object} params an object with properties:
+ *      * sessionUser
+ *      * twitterClient
+ *      * oldestFavorite [optional]
  */
-const getNextBatch = async (req, oldestFavorite) => {
-  const { user: sessionUser } = req.session;
-  const { twitterClient } = req;
+const getNextBatch = async ({
+  sessionUser,
+  twitterClient,
+  oldestFavorite,
+  pageSize = 20
+}) => {
   const topRange = await getNewestRangeSince(sessionUser, oldestFavorite);
 
   const twitterParams = {
     screen_name: sessionUser.screen_name,
-    count: TWITTER_FETCH_SIZE,
+    count: pageSize,
     max_id: oldestFavorite ? oldestFavorite.id_str : undefined,
     since_id: topRange ? topRange.start_id : undefined
   };
@@ -106,27 +118,28 @@ const getNextBatch = async (req, oldestFavorite) => {
 
   return await Favorite.find(query)
     .sort("-created_at")
-    .limit(PAGE_SIZE);
+    .limit(pageSize);
 };
 
-const findTweetsOlderThan = async req => {
+const findOlderFavorites = async req => {
+  // TODO: refactor to destructured parameters
   const { user: sessionUser } = req.session;
   const { before_id } = req.query;
 
-  const f = await Favorite.findOne({
+  const topFavorite = await Favorite.findOne({
     user_id: sessionUser.id,
     id_str: before_id
   });
 
   const favorites = [];
-  const olderFavesInRange = await findOlderFavoritesInRange(f);
+  const olderFavesInRange = await findOlderFavoritesInRange(topFavorite);
   if (olderFavesInRange.length) {
     favorites.push(...olderFavesInRange);
   }
 
   while (favorites.length < PAGE_SIZE) {
     const oldestCurrentFave =
-      favorites.length === 0 ? f : favorites[favorites.length - 1];
+      favorites.length === 0 ? topFavorite : favorites[favorites.length - 1];
 
     // what was the range before this one?
     const prevRange = await Range.findOne({
@@ -158,15 +171,15 @@ const findTweetsOlderThan = async req => {
   return favorites.slice(0, PAGE_SIZE);
 };
 
-const getNewestRangeSince = async (user, oldestFavorite) => {
+const getNewestRangeSince = async (sessionUser, oldestFavorite) => {
   return oldestFavorite
     ? (await Range.find({
-        user_id: user.id,
+        user_id: sessionUser.id,
         start_time: { $lt: oldestFavorite.created_at }
       })
         .sort("-start_time")
         .limit(1))[0]
-    : (await Range.find({ user_id: user.id })
+    : (await Range.find({ user_id: sessionUser.id })
         .sort("-start_time")
         .limit(1))[0];
 };
