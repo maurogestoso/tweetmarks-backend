@@ -376,6 +376,65 @@ describe("with no before_id query parameter", () => {
       });
     });
   });
+
+  describe("when there are no newer favorites than the ones saved in the db", () => {
+    describe("and the remaining favorites are immediately available in Twitter", () => {
+      let testQuery;
+      beforeAll(() => {
+        testQuery = () => authAgent.get("/api/favorites").expect(200);
+      });
+      let mockFavorites, dbFavorites, twitterFavorites;
+      beforeEach(async () => {
+        mockFavorites = createMockFavorites(20);
+        dbFavorites = mockFavorites.slice(0, 10);
+        twitterFavorites = mockFavorites.slice(10);
+
+        await saveFavorites(testUser, dbFavorites);
+        await Range.create({
+          start_time: dbFavorites[0].created_at,
+          end_time: dbFavorites[dbFavorites.length - 1].created_at,
+          start_id: dbFavorites[0].id_str,
+          end_id: dbFavorites[dbFavorites.length - 1].id_str,
+          user_id: testUser._id
+        });
+
+        listFavorites
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce(twitterFavorites);
+      });
+
+      test("responds with a full page of favorites", async () => {
+        const {
+          body: { favorites }
+        } = await testQuery();
+
+        expect(favorites).toHaveLength(mockFavorites.length);
+        favorites.forEach((fav, i) => {
+          expect(fav).toHaveProperty("id_str");
+          expect(fav.processed).toBe(false);
+          expect(fav.id_str).toBe(mockFavorites[i].id_str);
+        });
+      });
+
+      test("calls the Twitter API twice with the correct parameters", async () => {
+        await testQuery();
+
+        expect(listFavorites).toHaveBeenCalledTimes(2);
+        const [, params1] = listFavorites.mock.calls[0];
+        const [, params2] = listFavorites.mock.calls[1];
+
+        expect(params1).toHaveProperty("since_id");
+        expect(params1.since_id).toBe(dbFavorites[0].id_str);
+        expect(params1.screenName).toBe(testUser.screenName);
+        expect(params1.count).toBe(20);
+
+        expect(params2).toHaveProperty("max_id");
+        expect(params2.max_id).toBe(dbFavorites[dbFavorites.length - 1].id_str);
+        expect(params2.screenName).toBe(testUser.screenName);
+        expect(params2.count).toBe(20);
+      });
+    });
+  });
 });
 
 describe("with a before_id query parameter", () => {
