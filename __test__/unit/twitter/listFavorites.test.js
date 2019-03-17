@@ -1,4 +1,3 @@
-import sinon from "sinon";
 import { listFavorites } from "../../../src/twitter";
 import { createMockFavorites } from "../../helpers";
 
@@ -51,7 +50,7 @@ describe("when Twitter responds with 20 favorites", () => {
   test("responds with 20 favorites", async () => {
     const mockFavorites = createMockFavorites(20);
     const mockClient = {
-      get: sinon.stub().resolves(mockFavorites)
+      get: jest.fn().mockResolvedValueOnce(mockFavorites)
     };
 
     const favorites = await listFavorites(mockClient, validParams);
@@ -64,16 +63,16 @@ describe("when Twitter responds each time with < 20 favorites", () => {
   test("responds with 20 favorites if possible", async () => {
     const mockFavorites = createMockFavorites(30);
     const since_id = mockFavorites[mockFavorites.length - 1].created_at;
-    const stub = sinon.stub();
-    stub.onCall(0).resolves(mockFavorites.slice(0, 5));
-    stub.onCall(1).resolves(mockFavorites.slice(4, 10));
-    stub.onCall(2).resolves(mockFavorites.slice(9, 15));
-    stub.onCall(3).resolves(mockFavorites.slice(14));
-    stub.onCall(4).resolves([]);
-
     const mockClient = {
-      get: stub
+      get: jest.fn()
     };
+
+    mockClient.get
+      .mockResolvedValueOnce(mockFavorites.slice(0, 5))
+      .mockResolvedValueOnce(mockFavorites.slice(4, 10))
+      .mockResolvedValueOnce(mockFavorites.slice(9, 15))
+      .mockResolvedValueOnce(mockFavorites.slice(14))
+      .mockResolvedValueOnce([]);
 
     const favorites = await listFavorites(mockClient, {
       ...validParams,
@@ -90,14 +89,14 @@ describe("when Twitter responds each time with < 20 favorites", () => {
   test("responds with n favorites if less than 20 are possible", async () => {
     const mockFavorites = createMockFavorites(10);
     const since_id = mockFavorites[mockFavorites.length - 1].created_at;
-    const stub = sinon.stub();
-    stub.onCall(0).resolves(mockFavorites.slice(0, 5));
-    stub.onCall(1).resolves(mockFavorites.slice(4));
-    stub.onCall(2).resolves([]);
-
     const mockClient = {
-      get: stub
+      get: jest.fn()
     };
+
+    mockClient.get
+      .mockResolvedValueOnce(mockFavorites.slice(0, 5))
+      .mockResolvedValueOnce(mockFavorites.slice(4))
+      .mockResolvedValueOnce([]);
 
     const favorites = await listFavorites(mockClient, {
       ...validParams,
