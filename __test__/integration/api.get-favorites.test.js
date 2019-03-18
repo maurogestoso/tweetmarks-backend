@@ -16,6 +16,8 @@ import Range from "../../src/ranges/model";
 
 jest.mock("../../src/twitter");
 
+const PAGE_SIZE = 20;
+
 const saveFavorites = (user, favorites) => {
   return Favorite.create(
     favorites.map(
@@ -28,6 +30,16 @@ const saveFavorites = (user, favorites) => {
         })
     )
   );
+};
+
+const expectFavoritesToMatch = ({ received, expected, user }) => {
+  expect(received).toHaveLength(expected.length);
+  received.forEach((fav, i) => {
+    expect(fav).toHaveProperty("id_str");
+    expect(fav.processed).toBe(false);
+    expect(fav.id_str).toBe(expected[i].id_str);
+    expect(fav.user_id).toEqual(user._id.toString());
+  });
 };
 
 beforeAll(async () => {
@@ -52,15 +64,51 @@ test("401s for an unauthorised user", () => {
 });
 
 describe("with no before_id query parameter", () => {
-  describe("when there is no data in Twitter", () => {
-    test("responds with empty array if there are no favorites in Twitter", async () => {
+  const getFavorites200 = () => authAgent.get("/api/favorites").expect(200);
+
+  describe("when there are no new favorites in Twitter", () => {
+    beforeEach(() => {
       listFavorites.mockResolvedValueOnce([]);
+    });
 
-      const {
-        body: { favorites }
-      } = await authAgent.get("/api/favorites").expect(200);
+    describe("and there are no favorites stored in the DB", () => {
+      test("responds with an empty array", async () => {
+        const {
+          body: { favorites }
+        } = await getFavorites200();
+        expectFavoritesToMatch({
+          received: favorites,
+          expected: [],
+          user: testUser
+        });
+      });
+    });
 
-      expect(favorites).toHaveLength(0);
+    describe("and there is a full page of favorites stored in the DB", () => {
+      let mockFavorites = createMockFavorites(PAGE_SIZE);
+
+      beforeEach(async () => {
+        await saveFavorites(testUser, mockFavorites);
+        await new Range({
+          user_id: testUser._id,
+          start_time: mockFavorites[0].created_at,
+          start_id: mockFavorites[0].id_str,
+          end_time: mockFavorites[mockFavorites.length - 1].created_at,
+          end_id: mockFavorites[mockFavorites.length - 1].id_str
+        }).save();
+      });
+
+      test("responds with the favorites from the DB", async () => {
+        const {
+          body: { favorites }
+        } = await getFavorites200();
+
+        expectFavoritesToMatch({
+          received: favorites,
+          expected: mockFavorites,
+          user: testUser
+        });
+      });
     });
   });
 
