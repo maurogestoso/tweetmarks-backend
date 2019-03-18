@@ -9,13 +9,19 @@ import {
   saveRange
 } from "./helpers";
 
-const PAGE_SIZE = 20;
+const DEFAULT_PAGE_SIZE = 20;
 
 export const getFavorites = async (req, res, next) => {
+  const {
+    twitterClient,
+    session: { user },
+    query: { before_id }
+  } = req;
+
   try {
-    const favorites = req.query.before_id
+    const favorites = before_id
       ? await findOlderFavorites(req)
-      : await findLatestFavorites(req);
+      : await findLatestFavorites({ twitterClient, user });
 
     res.send({ favorites });
   } catch (err) {
@@ -25,14 +31,14 @@ export const getFavorites = async (req, res, next) => {
 
 const findLatestFavorites = async ({
   twitterClient,
-  session: { user: sessionUser },
-  query: { pageSize = 20 }
+  user,
+  pageSize = DEFAULT_PAGE_SIZE
 }) => {
   const favorites = [];
 
   while (favorites.length < pageSize) {
     const batch = await getNextBatch({
-      sessionUser,
+      user,
       twitterClient,
       oldestFavorite: favorites[favorites.length - 1],
       pageSize
@@ -43,7 +49,7 @@ const findLatestFavorites = async ({
     if (favorites.length === 0) return favorites;
 
     const veryLastRange = await Range.findOne({
-      user_id: sessionUser.id,
+      user_id: user.id,
       is_last: true
     });
 
@@ -78,15 +84,15 @@ const findLatestFavorites = async ({
  *      * oldestFavorite [optional]
  */
 const getNextBatch = async ({
-  sessionUser,
+  user,
   twitterClient,
   oldestFavorite,
   pageSize = 20
 }) => {
-  const topRange = await getNewestRangeSince(sessionUser, oldestFavorite);
+  const topRange = await getNewestRangeSince(user, oldestFavorite);
 
   const twitterParams = {
-    screen_name: sessionUser.screen_name,
+    screen_name: user.screen_name,
     count: pageSize,
     max_id: oldestFavorite ? oldestFavorite.id_str : undefined,
     since_id: topRange ? topRange.start_id : undefined
@@ -94,12 +100,12 @@ const getNextBatch = async ({
 
   // Fetch as many as possible from Twitter
   const twitterFavorites = await listFavorites(twitterClient, twitterParams);
-  await saveRange(sessionUser, twitterFavorites, twitterParams);
-  await saveFavorites(sessionUser, twitterFavorites);
+  await saveRange(user, twitterFavorites, twitterParams);
+  await saveFavorites(user, twitterFavorites);
 
   // Get the last 20 from DB, only more recent than the end of the top range
   const query = {
-    user_id: sessionUser.id,
+    user_id: user.id,
     processed: false
   };
 
@@ -137,7 +143,7 @@ const findOlderFavorites = async req => {
     favorites.push(...olderFavesInRange);
   }
 
-  while (favorites.length < PAGE_SIZE) {
+  while (favorites.length < DEFAULT_PAGE_SIZE) {
     const oldestCurrentFave =
       favorites.length === 0 ? topFavorite : favorites[favorites.length - 1];
 
@@ -168,7 +174,7 @@ const findOlderFavorites = async req => {
     }
   }
 
-  return favorites.slice(0, PAGE_SIZE);
+  return favorites.slice(0, DEFAULT_PAGE_SIZE);
 };
 
 const getNewestRangeSince = async (sessionUser, oldestFavorite) => {
